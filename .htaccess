@@ -1,6 +1,6 @@
-Options -Indexes
+DirectoryIndex index.php
+
 RewriteEngine On
-RewriteBase /ELLIOT-HR/
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
