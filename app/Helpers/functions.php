@@ -126,6 +126,27 @@ if (!function_exists('current_request_base_url')) {
     }
 }
 
+if (!function_exists('current_request_base_path')) {
+    function current_request_base_path(): string
+    {
+        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+        $basePath = rtrim(str_replace('/index.php', '', $scriptName), '/');
+
+        return $basePath === '/' ? '' : $basePath;
+    }
+}
+
+if (!function_exists('is_secure_request')) {
+    function is_secure_request(): bool
+    {
+        $proto = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0]));
+
+        return $proto === 'https'
+            || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (($_SERVER['SERVER_PORT'] ?? null) === '443');
+    }
+}
+
 if (!function_exists('app_base_url')) {
     function app_base_url(): string
     {
@@ -142,6 +163,16 @@ if (!function_exists('app_base_url')) {
         }
 
         return $configured;
+    }
+}
+
+if (!function_exists('path_url')) {
+    function path_url(string $path = ''): string
+    {
+        $basePath = current_request_base_path();
+        $path = '/' . ltrim($path, '/');
+
+        return $basePath . ($path === '/' ? '' : $path);
     }
 }
 

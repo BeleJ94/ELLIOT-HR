@@ -70,7 +70,7 @@ class AuthController extends Controller
         $this->json([
             'success' => true,
             'message' => 'Connexion reussie.',
-            'redirect' => url('/dashboard'),
+            'redirect' => path_url('/dashboard'),
         ]);
     }
 

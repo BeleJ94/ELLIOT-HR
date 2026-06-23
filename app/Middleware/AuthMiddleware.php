@@ -18,7 +18,7 @@ class AuthMiddleware
             echo json_encode([
                 'success' => false,
                 'message' => 'Session expiree. Veuillez vous reconnecter.',
-                'redirect' => url('/login'),
+                'redirect' => path_url('/login'),
             ], JSON_UNESCAPED_UNICODE);
             return false;
         }

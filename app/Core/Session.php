@@ -15,7 +15,7 @@ class Session
                 'lifetime' => 0,
                 'path' => '/',
                 'domain' => '',
-                'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+                'secure' => is_secure_request(),
                 'httponly' => true,
                 'samesite' => 'Lax',
             ]);

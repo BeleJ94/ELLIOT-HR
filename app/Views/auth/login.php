@@ -28,7 +28,7 @@
             <p>Utilisez vos identifiants professionnels pour continuer.</p>
         </div>
         <div class="alert alert-danger d-none" data-login-error role="alert"></div>
-        <form method="post" action="<?= e(url('/login')) ?>" class="form" data-login-form>
+        <form method="post" action="<?= e(path_url('/login')) ?>" class="form" data-login-form>
             <?= csrf_field() ?>
             <label class="form-label" for="email">Adresse email</label>
             <div class="input-icon">
@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function () {
         submit.disabled = true;
         label.textContent = 'Connexion...';
 
-        fetch(form.action, {
+        fetch(form.getAttribute('action') || window.location.pathname, {
             method: 'POST',
             body: new FormData(form),
             headers: {
@@ -88,7 +88,20 @@ document.addEventListener('DOMContentLoaded', function () {
             credentials: 'same-origin'
         })
             .then(function (response) {
-                return response.json().then(function (payload) {
+                return response.text().then(function (text) {
+                    var payload = {};
+
+                    try {
+                        payload = text ? JSON.parse(text) : {};
+                    } catch (error) {
+                        payload = {
+                            success: false,
+                            message: response.ok
+                                ? 'Reponse serveur invalide. Rechargez la page puis reessayez.'
+                                : 'Erreur serveur (' + response.status + '). Consultez les logs du VPS.'
+                        };
+                    }
+
                     return {
                         ok: response.ok,
                         payload: payload
@@ -97,15 +110,15 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(function (result) {
                 if (result.ok && result.payload.success) {
-                    window.location.href = result.payload.redirect || '<?= e(url('/dashboard')) ?>';
+                    window.location.href = result.payload.redirect || '<?= e(path_url('/dashboard')) ?>';
                     return;
                 }
 
                 errorBox.textContent = result.payload.message || 'Connexion impossible.';
                 errorBox.classList.remove('d-none');
             })
-            .catch(function () {
-                errorBox.textContent = 'Erreur reseau. Verifiez votre connexion puis reessayez.';
+            .catch(function (error) {
+                errorBox.textContent = 'Connexion impossible depuis cette page. Verifiez le domaine HTTPS et la configuration APP_URL du VPS.';
                 errorBox.classList.remove('d-none');
             })
             .finally(function () {
