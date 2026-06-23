@@ -89,10 +89,66 @@ if (!function_exists('e')) {
     }
 }
 
+if (!function_exists('is_local_app_url')) {
+    function is_local_app_url(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return in_array(strtolower((string) $host), ['localhost', '127.0.0.1', '::1'], true);
+    }
+}
+
+if (!function_exists('current_request_base_url')) {
+    function current_request_base_url(): string
+    {
+        $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+        $host = trim(explode(',', (string) $host)[0]);
+
+        if ($host === '') {
+            return '';
+        }
+
+        $https = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null;
+        $scheme = strtolower(trim(explode(',', (string) $https)[0]));
+
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        }
+
+        $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+        $basePath = rtrim(str_replace('/index.php', '', $scriptName), '/');
+
+        if ($basePath === '/') {
+            $basePath = '';
+        }
+
+        return rtrim($scheme . '://' . $host . $basePath, '/');
+    }
+}
+
+if (!function_exists('app_base_url')) {
+    function app_base_url(): string
+    {
+        $configured = rtrim((string) config('app.url', 'auto'), '/');
+        $detected = current_request_base_url();
+        $currentHost = strtolower((string) parse_url($detected, PHP_URL_HOST));
+
+        if ($configured === '' || strtolower($configured) === 'auto') {
+            return $detected;
+        }
+
+        if ($detected !== '' && is_local_app_url($configured) && !in_array($currentHost, ['localhost', '127.0.0.1', '::1'], true)) {
+            return $detected;
+        }
+
+        return $configured;
+    }
+}
+
 if (!function_exists('url')) {
     function url(string $path = ''): string
     {
-        $base = rtrim((string) config('app.url', ''), '/');
+        $base = app_base_url();
         $path = '/' . ltrim($path, '/');
 
         return $base . ($path === '/' ? '' : $path);
