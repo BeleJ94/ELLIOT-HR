@@ -95,7 +95,13 @@ class Training extends Model
 
     public function companies(?int $companyId): array
     {
-        [$scope, $params] = $this->scope($companyId, 'companies');
+        $scope = '';
+        $params = [];
+
+        if ($companyId !== null) {
+            $scope = ' AND companies.id = :company_id';
+            $params['company_id'] = $companyId;
+        }
 
         return Database::query(
             "SELECT id, name FROM companies WHERE deleted_at IS NULL {$scope} ORDER BY name ASC",

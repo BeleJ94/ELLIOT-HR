@@ -744,14 +744,16 @@ VALUES
     (6, 'Gerer les conges', 'leaves.manage', 'leaves', 'Validation et suivi des conges'),
     (7, 'Gerer la paie', 'payroll.manage', 'payroll', 'Preparation et validation de la paie'),
     (8, 'Consulter son espace', 'self.view', 'self-service', 'Acces au portail personnel'),
-    (9, 'Gerer les declarations', 'declarations.manage', 'declarations', 'Declarations fiscales et sociales');
+    (9, 'Gerer les declarations', 'declarations.manage', 'declarations', 'Declarations fiscales et sociales'),
+    (10, 'Gerer les formations', 'trainings.manage', 'trainings', 'Catalogue, sessions et presences de formation');
 
 INSERT INTO role_permissions
     (role_id, permission_id)
 VALUES
     (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),
-    (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (2, 8), (2, 9),
-    (3, 3), (3, 5), (3, 6), (3, 8),
+    (1, 10),
+    (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (2, 8), (2, 9), (2, 10),
+    (3, 3), (3, 5), (3, 6), (3, 8), (3, 10),
     (4, 8);
 
 INSERT INTO users
