@@ -20,17 +20,65 @@
             return response.json().then(function (payload) {
                 payload.httpOk = response.ok;
                 return payload;
+            }).catch(function () {
+                return {
+                    success: false,
+                    httpOk: false,
+                    message: 'Le serveur a retourne une reponse invalide (HTTP ' + response.status + ').'
+                };
             });
         });
     }
 
-    function showError(box, message) {
+    function clearErrors(form, box) {
+        form.querySelectorAll('.is-invalid').forEach(function (field) {
+            field.classList.remove('is-invalid');
+            field.removeAttribute('aria-invalid');
+        });
+        form.querySelectorAll('[data-generated-field-error]').forEach(function (feedback) {
+            feedback.remove();
+        });
+
+        if (box) {
+            box.classList.add('d-none');
+            box.textContent = '';
+        }
+    }
+
+    function showError(form, box, message, errors) {
+        var details = errors && typeof errors === 'object' ? errors : {};
+        var messages = Object.keys(details).map(function (fieldName) {
+            var field = form.querySelector('[name="' + fieldName.replace(/"/g, '\\"') + '"]');
+            var fieldMessage = String(details[fieldName]);
+
+            if (field) {
+                field.classList.add('is-invalid');
+                field.setAttribute('aria-invalid', 'true');
+
+                var feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback d-block';
+                feedback.setAttribute('data-generated-field-error', '');
+                feedback.textContent = fieldMessage;
+                field.insertAdjacentElement('afterend', feedback);
+            }
+
+            return fieldMessage;
+        });
+        var fullMessage = message || 'Operation impossible.';
+
+        if (messages.length) {
+            fullMessage += '\n• ' + messages.join('\n• ');
+        }
+
         if (!box) {
-            alert(message);
+            alert(fullMessage);
             return;
         }
-        box.textContent = message;
+
+        box.style.whiteSpace = 'pre-line';
+        box.textContent = fullMessage;
         box.classList.remove('d-none');
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function bindForms() {
@@ -42,10 +90,7 @@
                 var submit = form.querySelector('[data-submit-label]');
                 var original = submit ? submit.textContent : '';
 
-                if (errorBox) {
-                    errorBox.classList.add('d-none');
-                    errorBox.textContent = '';
-                }
+                clearErrors(form, errorBox);
 
                 if (submit) {
                     submit.disabled = true;
@@ -55,7 +100,7 @@
                 request(form.action, new FormData(form))
                     .then(function (payload) {
                         if (!payload.httpOk || !payload.success) {
-                            showError(errorBox, payload.message || 'Operation impossible.');
+                            showError(form, errorBox, payload.message || 'Operation impossible.', payload.errors);
                             return;
                         }
 
@@ -68,8 +113,8 @@
                             window.location.reload();
                         }
                     })
-                    .catch(function () {
-                        showError(errorBox, 'Erreur reseau. Reessayez dans un instant.');
+                    .catch(function (error) {
+                        showError(form, errorBox, 'Erreur reseau. Reessayez dans un instant.');
                     })
                     .finally(function () {
                         if (submit) {

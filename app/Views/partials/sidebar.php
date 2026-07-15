@@ -2,6 +2,26 @@
 $sidebarUser = \App\Core\Auth::user() ?? [];
 $sidebarRole = $sidebarUser['role_slug'] ?? '';
 $can = static fn(array $roles): bool => in_array($sidebarRole, $roles, true);
+$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+if ($scriptDir !== '/' && strpos($currentPath, $scriptDir) === 0) {
+    $currentPath = substr($currentPath, strlen($scriptDir));
+}
+$currentPath = '/' . trim($currentPath, '/');
+$currentPath = $currentPath === '//' ? '/' : $currentPath;
+$isNavActive = static function (array $item) use (&$isNavActive, $currentPath): bool {
+    $path = '/' . trim($item['path'] ?? '', '/');
+    $path = $path === '//' ? '/' : $path;
+    if ($currentPath === $path || ($path !== '/' && strpos($currentPath, $path . '/') === 0)) {
+        return true;
+    }
+    foreach ($item['children'] ?? [] as $child) {
+        if ($isNavActive($child)) {
+            return true;
+        }
+    }
+    return false;
+};
 $navGroups = [
     [
         'label' => 'Tableau de bord',
@@ -24,6 +44,18 @@ $navGroups = [
         'items' => [
             ['path' => '/attendance', 'label' => 'Présences', 'icon' => 'clock', 'roles' => ['super-admin', 'admin-rh', 'manager', 'employe']],
             ['path' => '/leaves', 'label' => 'Congés', 'icon' => 'calendar', 'roles' => ['super-admin', 'admin-rh', 'manager', 'employe']],
+            [
+                'path' => '/medical',
+                'label' => 'Prises en charge',
+                'icon' => 'heart',
+                'roles' => ['super-admin', 'admin-rh', 'manager', 'employe'],
+                'children' => [
+                    ['path' => '/medical/requests', 'label' => 'Demandes & bons', 'roles' => ['super-admin', 'admin-rh', 'manager', 'employe']],
+                    ['path' => '/medical/dependents', 'label' => 'Ayants droit', 'roles' => ['super-admin', 'admin-rh', 'manager', 'employe']],
+                    ['path' => '/medical/providers', 'label' => 'Prestataires', 'roles' => ['super-admin', 'admin-rh', 'manager']],
+                    ['path' => '/medical/settings', 'label' => 'Politique médicale', 'roles' => ['super-admin', 'admin-rh', 'manager']],
+                ],
+            ],
         ],
     ],
     [
@@ -85,12 +117,25 @@ $navGroups = [
                     </span>
                     <ul class="navbar-nav">
                         <?php foreach ($visibleItems as $item): ?>
-                            <li class="nav-item <?= e(active_class($item['path'])) ?>">
+                            <?php
+                            $children = array_values(array_filter($item['children'] ?? [], static fn(array $child): bool => $can($child['roles'] ?? $item['roles'])));
+                            $isActive = $isNavActive($item);
+                            ?>
+                            <li class="nav-item <?= $isActive ? 'active' : '' ?> <?= $children !== [] ? 'has-children' : '' ?>">
                                 <a class="nav-link" href="<?= e(url($item['path'])) ?>">
                                     <span class="nav-icon"><?= icon($item['icon']) ?></span>
                                     <span class="nav-link-title"><?= e($item['label']) ?></span>
                                     <span class="nav-chevron">›</span>
                                 </a>
+                                <?php if ($children !== []): ?>
+                                    <ul class="nav-submenu">
+                                        <?php foreach ($children as $child): ?>
+                                            <li class="<?= $isNavActive($child) ? 'active' : '' ?>">
+                                                <a href="<?= e(url($child['path'])) ?>"><?= e($child['label']) ?></a>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>

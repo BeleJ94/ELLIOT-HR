@@ -264,6 +264,7 @@ if (!function_exists('icon')) {
             'filter' => '<path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/>',
             'download' => '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
             'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>',
+            'heart' => '<path d="M19.5 12.6 12 20l-7.5-7.4A5 5 0 0 1 12 6a5 5 0 0 1 7.5 6.6"/><path d="M12 8v6"/><path d="M9 11h6"/>',
             'key' => '<circle cx="8" cy="15" r="4"/><path d="m11 12 8-8"/><path d="m15 8 2 2"/><path d="m17 6 2 2"/>',
         ];
 

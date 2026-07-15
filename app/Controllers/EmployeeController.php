@@ -6,6 +6,8 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Employee;
 use App\Models\Training;
+use PDOException;
+use RuntimeException;
 use Throwable;
 
 class EmployeeController extends Controller
@@ -89,7 +91,7 @@ class EmployeeController extends Controller
             ]);
         } catch (Throwable $exception) {
             error_log($exception->getMessage());
-            $this->jsonError('Creation impossible. Verifiez les donnees puis reessayez.', 500);
+            $this->jsonError($this->employeeSaveError($exception, 'Creation'), 500);
         }
     }
 
@@ -168,7 +170,7 @@ class EmployeeController extends Controller
             ]);
         } catch (Throwable $exception) {
             error_log($exception->getMessage());
-            $this->jsonError('Mise a jour impossible.', 500);
+            $this->jsonError($this->employeeSaveError($exception, 'Mise a jour'), 500);
         }
     }
 
@@ -395,5 +397,31 @@ class EmployeeController extends Controller
             'message' => $message,
             'errors' => $errors,
         ], $status);
+    }
+
+    private function employeeSaveError(Throwable $exception, string $operation): string
+    {
+        if ($exception instanceof RuntimeException && !($exception instanceof PDOException)) {
+            return $operation . ' impossible : ' . rtrim($exception->getMessage(), '.') . '.';
+        }
+
+        if ($exception instanceof PDOException) {
+            $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+            $databaseMessage = (string) ($exception->errorInfo[2] ?? $exception->getMessage());
+
+            if ($driverCode === 1062) {
+                if (stripos($databaseMessage, 'uq_employees_company_number') !== false) {
+                    return $operation . ' impossible : ce matricule est deja utilise dans cette entreprise.';
+                }
+
+                return $operation . ' impossible : une donnee unique existe deja.';
+            }
+
+            if ($driverCode === 1452) {
+                return $operation . ' impossible : une entreprise, une affectation ou un responsable selectionne est introuvable.';
+            }
+        }
+
+        return $operation . ' impossible en raison d’une erreur interne. Reessayez ou contactez l’administrateur.';
     }
 }
