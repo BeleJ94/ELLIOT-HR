@@ -2,40 +2,57 @@ name: 🚀 Déploiement automatique ELLIOT-HR
 
 on:
   push:
-    branches: [ main ]  # Se déclenche sur un push vers la branche 'main'
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: 📥 Récupérer le code du dépôt
+    - name: 📥 Récupérer le code
       uses: actions/checkout@v4
-
+      
     - name: 🔗 Se connecter au VPS et déployer
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.VPS_HOST }} # Vous devrez aussi créer ce secret
-        username: ${{ secrets.VPS_USER }} # Et celui-ci
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          # Aller dans le dossier du projet sur le VPS
-          cd /var/www/vhosts/belej-erp.com/elliot-hr.belej-erp.com
-
-          # Mettre à jour le code
-          git pull origin main
-
-          # (Optionnel) Exécuter vos migrations si vous en avez
-          # php migrate.php
-
-          # (Optionnel) Installer les dépendances si nécessaire
-          # composer install --no-dev --optimize-autoloader
-          # npm install --production
-
-          # Corriger les permissions pour le serveur web
-          sudo chown -R www-data:www-data .
-          sudo find . -type d -exec chmod 755 {} \;
-          sudo find . -type f -exec chmod 644 {} \;
-
-          echo "✅ Déploiement terminé avec succès !"
+          # Logging détaillé
+          echo "🚀 DÉPLOIEMENT COMMENCÉ À $(date)"
+          echo "📂 Dossier actuel : $(pwd)"
           
+          cd /var/www/vhosts/belej-erp.com/elliot-hr.belej-erp.com
+          echo "📂 Dossier du projet : $(pwd)"
+          
+          # Sauvegarder les fichiers de configuration
+          echo "💾 Sauvegarde des fichiers de configuration..."
+          cp .env /tmp/.env.bak 2>/dev/null || echo "⚠️ Pas de fichier .env trouvé"
+          cp .htaccess /tmp/.htaccess.bak 2>/dev/null || echo "⚠️ Pas de fichier .htaccess trouvé"
+          
+          # Mise à jour
+          echo "📥 Récupération des dernières modifications..."
+          git fetch origin
+          echo "📊 Commit actuel sur le VPS :"
+          git log --oneline -1
+          echo "📊 Dernier commit distant :"
+          git log origin/main --oneline -1
+          
+          echo "🔄 Mise à jour forcée vers origin/main..."
+          git reset --hard origin/main
+          
+          # Restaurer les fichiers de configuration
+          echo "♻️ Restauration des fichiers de configuration..."
+          cp /tmp/.env.bak .env 2>/dev/null || echo "⚠️ Pas de .env à restaurer"
+          cp /tmp/.htaccess.bak .htaccess 2>/dev/null || echo "⚠️ Pas de .htaccess à restaurer"
+          
+          # Permissions
+          echo "🔧 Correction des permissions..."
+          sudo chown -R www-data:www-data . || echo "⚠️ Problème de chown (utilisateur www-data inexistant ?)"
+          sudo find . -type d -exec chmod 755 {} \; || echo "⚠️ Problème sur les dossiers"
+          sudo find . -type f -exec chmod 644 {} \; || echo "⚠️ Problème sur les fichiers"
+          
+          echo "✅ DÉPLOIEMENT TERMINÉ AVEC SUCCÈS À $(date)"
+          echo "📊 Commit final sur le VPS :"
+          git log --oneline -1
