@@ -359,12 +359,13 @@ class EmployeeController extends Controller
             throw new \RuntimeException('Impossible de creer le dossier upload.');
         }
 
-        if (!is_writable($targetDir)) {
-            throw new \RuntimeException('Le dossier upload existe mais le serveur web ne peut pas y ecrire.');
-        }
+        clearstatcache(true, $targetDir);
 
         if (!move_uploaded_file($file['tmp_name'], $target)) {
-            throw new \RuntimeException('Impossible de deplacer le fichier.');
+            $uploadError = error_get_last();
+            $detail = is_array($uploadError) ? trim((string) ($uploadError['message'] ?? '')) : '';
+            error_log('Employee upload failed: target=' . $target . '; writable=' . (is_writable($targetDir) ? 'yes' : 'no') . '; detail=' . $detail);
+            throw new \RuntimeException('La photo a ete recue, mais son enregistrement sur le serveur a echoue.');
         }
 
         return 'public/' . $relative;
