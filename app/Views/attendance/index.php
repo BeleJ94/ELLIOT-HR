@@ -188,7 +188,18 @@ $queryBase = ['company_id' => $selectedCompanyId];
 
             <div class="alert alert-danger d-none" data-attendance-error></div>
             <div class="card company-table-card attendance-entry-card">
-                <div class="table-responsive">
+                <div class="attendance-table-toolbar">
+                    <div><strong>Liste des agents</strong><span data-attendance-result-count><?= e((string) count($rows)) ?> agent(s)</span></div>
+                    <label>Afficher
+                        <select class="form-select form-select-sm" data-attendance-page-size>
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                        </select>
+                        lignes
+                    </label>
+                </div>
+                <div class="table-responsive attendance-entry-scroll">
                     <table class="table table-vcenter card-table" id="attendance-table" data-no-datatable>
                         <thead>
                             <tr>
@@ -234,12 +245,20 @@ $queryBase = ['company_id' => $selectedCompanyId];
                         </tbody>
                     </table>
                 </div>
+                <div class="attendance-table-empty" data-attendance-empty hidden><?= icon('search') ?><strong>Aucun agent trouvé</strong><span>Modifiez votre recherche ou le filtre de département.</span></div>
+                <div class="attendance-table-pagination" data-attendance-pagination>
+                    <span data-attendance-page-info>Page 1</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline" type="button" data-attendance-previous>Précédent</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-attendance-next>Suivant</button>
+                    </div>
+                </div>
             </div>
 
             <?php if ($history !== []): ?>
-                <section class="attendance-history">
-                    <div class="attendance-section-head"><div><span class="dashboard-section-kicker">Audit</span><h3>Historique de la journée</h3></div><span class="badge bg-blue-lt"><?= e((string) count($history)) ?></span></div>
-                    <div class="attendance-history-list">
+                <details class="attendance-history" data-attendance-history>
+                    <summary class="attendance-section-head"><div><span class="dashboard-section-kicker">Audit</span><h3>Historique de la journée</h3><small>Consultez les dernières modifications et actions administratives.</small></div><div><span class="badge bg-blue-lt"><?= e((string) count($history)) ?></span><span class="attendance-history-toggle">Afficher</span></div></summary>
+                    <div class="attendance-history-list attendance-history-scroll">
                         <?php foreach ($history as $event): ?>
                             <?php
                             $actor = trim(($event['first_name'] ?? '') . ' ' . ($event['last_name'] ?? ''));
@@ -248,7 +267,7 @@ $queryBase = ['company_id' => $selectedCompanyId];
                             <article><i></i><div><strong><?= e(str_replace('_', ' ', $event['action'])) ?></strong><span><?= e($subject ?: 'Journée complète') ?> · par <?= e($actor ?: 'Système') ?></span><small><?= e(date('d/m/Y H:i', strtotime($event['created_at']))) ?><?= !empty($event['reason']) ? ' · ' . e($event['reason']) : '' ?></small></div></article>
                         <?php endforeach; ?>
                     </div>
-                </section>
+                </details>
             <?php endif; ?>
         </main>
     </div>

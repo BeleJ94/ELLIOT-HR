@@ -115,6 +115,41 @@
         if (!config) return;
 
         var rows = Array.prototype.slice.call(document.querySelectorAll('[data-attendance-entry]'));
+        var page = 1;
+        var pageSize = 20;
+        var searchTerm = '';
+
+        function filteredRows() {
+            return rows.filter(function (row) {
+                return searchTerm === '' || row.textContent.toLocaleLowerCase().indexOf(searchTerm) !== -1;
+            });
+        }
+
+        function renderRows() {
+            var matches = filteredRows();
+            var totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
+            page = Math.min(Math.max(1, page), totalPages);
+            var start = (page - 1) * pageSize;
+            var visibleRows = matches.slice(start, start + pageSize);
+
+            rows.forEach(function (row) { row.hidden = true; });
+            visibleRows.forEach(function (row) { row.hidden = false; });
+
+            var count = document.querySelector('[data-attendance-result-count]');
+            var info = document.querySelector('[data-attendance-page-info]');
+            var empty = document.querySelector('[data-attendance-empty]');
+            var pagination = document.querySelector('[data-attendance-pagination]');
+            var previous = document.querySelector('[data-attendance-previous]');
+            var next = document.querySelector('[data-attendance-next]');
+
+            if (count) count.textContent = matches.length + ' agent(s)';
+            if (info) info.textContent = matches.length ? 'Page ' + page + ' sur ' + totalPages + ' · ' + (start + 1) + '–' + Math.min(start + pageSize, matches.length) + ' sur ' + matches.length : 'Aucun résultat';
+            if (empty) empty.hidden = matches.length !== 0;
+            if (pagination) pagination.hidden = matches.length === 0;
+            if (previous) previous.disabled = page <= 1;
+            if (next) next.disabled = page >= totalPages;
+        }
+
         rows.forEach(function (row) {
             var status = row.querySelector('[data-attendance-status]');
             if (!status || status.disabled) return;
@@ -125,12 +160,36 @@
         var search = document.querySelector('[data-attendance-search]');
         if (search) {
             search.addEventListener('input', function () {
-                var needle = search.value.trim().toLocaleLowerCase();
-                rows.forEach(function (row) {
-                    row.hidden = needle !== '' && row.textContent.toLocaleLowerCase().indexOf(needle) === -1;
-                });
+                searchTerm = search.value.trim().toLocaleLowerCase();
+                page = 1;
+                renderRows();
             });
         }
+
+        var pageSizeSelect = document.querySelector('[data-attendance-page-size]');
+        if (pageSizeSelect) {
+            pageSize = Number(pageSizeSelect.value) || 20;
+            pageSizeSelect.addEventListener('change', function () {
+                pageSize = Number(pageSizeSelect.value) || 20;
+                page = 1;
+                renderRows();
+            });
+        }
+
+        var previousPage = document.querySelector('[data-attendance-previous]');
+        var nextPage = document.querySelector('[data-attendance-next]');
+        if (previousPage) previousPage.addEventListener('click', function () { page--; renderRows(); });
+        if (nextPage) nextPage.addEventListener('click', function () { page++; renderRows(); });
+
+        var history = document.querySelector('[data-attendance-history]');
+        if (history) {
+            history.addEventListener('toggle', function () {
+                var toggle = history.querySelector('.attendance-history-toggle');
+                if (toggle) toggle.textContent = history.open ? 'Masquer' : 'Afficher';
+            });
+        }
+
+        renderRows();
 
         var fillButton = document.querySelector('[data-attendance-fill-standard]');
         if (fillButton) {
