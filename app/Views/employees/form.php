@@ -22,12 +22,13 @@ $fullName = trim(($employee['last_name'] ?? '') . ' ' . ($employee['middle_name'
             <label class="employee-photo-box" for="employee-photo">
                 <?php if ($photo): ?>
                     <img src="<?= e($photo) ?>" alt="Apercu de la photo" data-photo-preview>
-                    <span class="d-none" data-photo-initials></span>
+                    <span hidden data-photo-initials></span>
                 <?php else: ?>
-                    <img class="d-none" src="" alt="Apercu de la photo" data-photo-preview>
+                    <img hidden alt="Apercu de la photo" data-photo-preview>
                     <span data-photo-initials><?= e(strtoupper(substr($employee['first_name'] ?? 'A', 0, 1) . substr($employee['last_name'] ?? '', 0, 1))) ?></span>
                 <?php endif; ?>
-                <span class="employee-photo-action">Choisir une photo</span>
+                <span class="employee-photo-action"><?= icon('plus') ?><span>Ajouter une photo</span></span>
+                <small>JPG, PNG ou WebP · 10 Mo max.</small>
                 <input id="employee-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden data-photo-input>
             </label>
             <strong data-summary-name><?= e($fullName ?: 'Nouvel agent') ?></strong>

@@ -238,9 +238,9 @@
                 return;
             }
             preview.src = URL.createObjectURL(file);
-            preview.classList.remove('d-none');
+            preview.hidden = false;
             if (initials) {
-                initials.classList.add('d-none');
+                initials.hidden = true;
             }
         });
     }

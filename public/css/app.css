@@ -5274,7 +5274,39 @@ body.theme-light {
 .employee-profile-preview > strong { margin-top: 6px; color: var(--elliot-ink); font-size: 13px; }
 .employee-profile-preview > small { overflow: hidden; color: var(--elliot-subtle); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .employee-profile-preview .employee-photo-box { cursor: pointer; }
-.employee-photo-action { min-height: auto !important; padding: 7px !important; aspect-ratio: auto !important; border: 1px dashed #b8c5d4 !important; background: #f8fafc !important; color: var(--elliot-primary) !important; font-size: 10px !important; }
+.employee-profile-preview .employee-photo-box > img,
+.employee-profile-preview .employee-photo-box > span[data-photo-initials] {
+    width: 112px;
+    height: 112px;
+    margin: 4px auto 7px;
+    aspect-ratio: auto;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #e9f2ff, #dce9fb);
+    box-shadow: 0 0 0 1px #cedaeb, 0 8px 20px rgba(40, 74, 128, .12);
+    font-size: 30px;
+}
+.employee-profile-preview .employee-photo-box > img { object-fit: cover; }
+.employee-photo-box > [hidden] { display: none !important; }
+.employee-photo-action {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px !important;
+    padding: 7px 10px !important;
+    aspect-ratio: auto !important;
+    border: 1px solid #b9c9dc !important;
+    border-radius: 4px !important;
+    background: #fff !important;
+    color: var(--elliot-primary) !important;
+    font-size: 10px !important;
+    transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.employee-photo-action .icon { width: 14px; height: 14px; }
+.employee-photo-action > span { display: inline !important; width: auto !important; min-height: 0 !important; padding: 0 !important; aspect-ratio: auto !important; border: 0 !important; background: transparent !important; box-shadow: none !important; color: inherit !important; font-size: inherit !important; }
+.employee-photo-box:hover .employee-photo-action { border-color: var(--elliot-primary) !important; background: #f3f7ff !important; box-shadow: 0 0 0 3px rgba(32, 107, 196, .08); }
+.employee-photo-box > small { color: #8491a3; font-size: 8px; font-weight: 600; text-align: center; }
 .employee-section-nav { display: grid; gap: 3px; }
 .employee-section-nav .company-form-step { width: 100%; border: 0; background: transparent; text-align: left; }
 .employee-section-nav .company-form-step:hover { background: #f3f6fa; color: var(--elliot-primary); }
