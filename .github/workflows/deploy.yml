@@ -1,0 +1,40 @@
+name: 🚀 Déploiement automatique ELLIOT-HR
+
+on:
+  push:
+    branches: [ main ]  # Se déclenche sur un push vers la branche 'main'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Récupérer le code du dépôt
+      uses: actions/checkout@v4
+
+    - name: 🔗 Se connecter au VPS et déployer
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.VPS_HOST }} # Vous devrez aussi créer ce secret
+        username: ${{ secrets.VPS_USER }} # Et celui-ci
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          # Aller dans le dossier du projet sur le VPS
+          cd /var/www/vhosts/belej-erp.com/elliot-hr.belej-erp.com
+
+          # Mettre à jour le code
+          git pull origin main
+
+          # (Optionnel) Exécuter vos migrations si vous en avez
+          # php migrate.php
+
+          # (Optionnel) Installer les dépendances si nécessaire
+          # composer install --no-dev --optimize-autoloader
+          # npm install --production
+
+          # Corriger les permissions pour le serveur web
+          sudo chown -R www-data:www-data .
+          sudo find . -type d -exec chmod 755 {} \;
+          sudo find . -type f -exec chmod 644 {} \;
+
+          echo "✅ Déploiement terminé avec succès !"

@@ -464,9 +464,12 @@ class Employee extends Model
     private function optionRows(string $table, string $labelColumn, ?int $companyId): array
     {
         [$scope, $params] = $this->companyScope($companyId, $table);
+        $relationColumns = $table === 'departments'
+            ? ', branch_id'
+            : ($table === 'positions' ? ', department_id' : '');
 
         return Database::query(
-            "SELECT id, {$labelColumn} AS name, company_id
+            "SELECT id, {$labelColumn} AS name, company_id{$relationColumns}
              FROM {$table}
              WHERE deleted_at IS NULL {$scope}
              ORDER BY {$labelColumn} ASC",
@@ -479,7 +482,7 @@ class Employee extends Model
         [$scope, $params] = $this->companyScope($companyId, 'employees');
 
         return Database::query(
-            "SELECT id, first_name, middle_name, last_name, company_id
+            "SELECT id, first_name, middle_name, last_name, company_id, department_id
              FROM employees
              WHERE deleted_at IS NULL {$scope}
              ORDER BY last_name ASC, first_name ASC",
@@ -515,14 +518,18 @@ class Employee extends Model
                 'UPDATE contracts
                  SET contract_type = :contract_type,
                      start_date = :start_date,
+                     end_date = :end_date,
                      base_salary = :base_salary,
+                     currency = :currency,
                      status = :status,
                      updated_at = NOW()
                  WHERE id = :id',
                 [
                     'contract_type' => $contractType,
                     'start_date' => $data['hire_date'] ?: date('Y-m-d'),
+                    'end_date' => $this->nullableDate($data['contract_end_date'] ?? null),
                     'base_salary' => $baseSalary,
+                    'currency' => trim($data['currency'] ?? 'USD') ?: 'USD',
                     'status' => $this->contractStatus($data['employment_status'] ?? 'active'),
                     'id' => (int) $existing['id'],
                 ]
@@ -532,15 +539,16 @@ class Employee extends Model
 
         Database::query(
             'INSERT INTO contracts
-                (company_id, employee_id, contract_number, contract_type, start_date, base_salary, currency, status, created_at)
+                (company_id, employee_id, contract_number, contract_type, start_date, end_date, base_salary, currency, status, created_at)
              VALUES
-                (:company_id, :employee_id, :contract_number, :contract_type, :start_date, :base_salary, :currency, :status, NOW())',
+                (:company_id, :employee_id, :contract_number, :contract_type, :start_date, :end_date, :base_salary, :currency, :status, NOW())',
             [
                 'company_id' => $companyId,
                 'employee_id' => $employeeId,
                 'contract_number' => 'CTR-' . $employeeId . '-' . date('YmdHis'),
                 'contract_type' => $contractType,
                 'start_date' => $data['hire_date'] ?: date('Y-m-d'),
+                'end_date' => $this->nullableDate($data['contract_end_date'] ?? null),
                 'base_salary' => $baseSalary,
                 'currency' => $data['currency'] ?? 'USD',
                 'status' => $this->contractStatus($data['employment_status'] ?? 'active'),
@@ -551,6 +559,13 @@ class Employee extends Model
     private function nullableInt($value): ?int
     {
         return $value === null || $value === '' ? null : (int) $value;
+    }
+
+    private function nullableDate($value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function companyOwnsRecord(string $table, int $companyId, ?int $id): bool

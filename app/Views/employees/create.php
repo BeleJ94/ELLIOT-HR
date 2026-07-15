@@ -6,8 +6,8 @@ $options = $options ?? [];
 <div class="module-header module-header-rich erp-page-header">
     <div>
         <span class="dashboard-section-kicker">Dossier RH</span>
-        <h1 class="page-title">Nouvel employe</h1>
-        <p>Creer le dossier administratif, l'affectation et le contrat initial.</p>
+        <h1 class="page-title">Nouvel agent</h1>
+        <p>Creez son dossier RH, son affectation et son contrat initial.</p>
     </div>
     <a class="btn btn-outline" href="<?= e(url('/employees')) ?>"><?= icon('arrow-right') ?><span>Retour</span></a>
 </div>

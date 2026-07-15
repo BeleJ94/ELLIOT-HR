@@ -79,10 +79,246 @@
         box.textContent = fullMessage;
         box.classList.remove('d-none');
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        var invalid = form.querySelector('.is-invalid');
+        if (invalid) {
+            var optionalSection = invalid.closest('details');
+            if (optionalSection) {
+                optionalSection.open = true;
+            }
+            invalid.focus({ preventScroll: true });
+        }
+    }
+
+    function optionVisible(option, filters) {
+        if (!option.value) {
+            return true;
+        }
+
+        return Object.keys(filters).every(function (attribute) {
+            var required = filters[attribute];
+            var actual = option.getAttribute('data-' + attribute) || '';
+            return !required || !actual || actual === required;
+        });
+    }
+
+    function filterSelect(select, filters) {
+        if (!select) {
+            return;
+        }
+
+        var selectedStillAvailable = false;
+        Array.prototype.forEach.call(select.options, function (option) {
+            var visible = optionVisible(option, filters);
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (option.selected && visible) {
+                selectedStillAvailable = true;
+            }
+        });
+
+        if (!selectedStillAvailable) {
+            select.value = '';
+        }
+    }
+
+    function bindOrganization(form) {
+        var company = form.querySelector('[data-company-select]');
+        var branch = form.querySelector('[data-dependent-select="branch"]');
+        var department = form.querySelector('[data-dependent-select="department"]');
+        var position = form.querySelector('[data-dependent-select="position"]');
+        var manager = form.querySelector('[data-dependent-select="manager"]');
+
+        function refresh() {
+            var companyId = company ? company.value : '';
+
+            filterSelect(branch, { 'company-id': companyId });
+            var branchId = branch ? branch.value : '';
+            filterSelect(department, { 'company-id': companyId, 'branch-id': branchId });
+            var departmentId = department ? department.value : '';
+            filterSelect(position, { 'company-id': companyId, 'department-id': departmentId });
+            filterSelect(manager, { 'company-id': companyId, 'department-id': departmentId });
+            updateSummary(form);
+        }
+
+        [company, branch, department].forEach(function (select) {
+            if (select) {
+                select.addEventListener('change', refresh);
+            }
+        });
+        if (position) {
+            position.addEventListener('change', function () { updateSummary(form); });
+        }
+        refresh();
+    }
+
+    function bindContract(form) {
+        var type = form.querySelector('[data-contract-type]');
+        var end = form.querySelector('[data-contract-end]');
+        var endGroup = form.querySelector('[data-contract-end-group]');
+
+        function refresh() {
+            var requiresEnd = type && ['cdd', 'internship', 'temporary'].indexOf(type.value) !== -1;
+            if (endGroup) {
+                endGroup.classList.toggle('d-none', !requiresEnd);
+            }
+            if (end) {
+                end.required = Boolean(requiresEnd);
+            }
+            updateSummary(form);
+        }
+
+        if (type) {
+            type.addEventListener('change', refresh);
+        }
+        form.querySelectorAll('[data-contract-summary-source]').forEach(function (field) {
+            field.addEventListener('input', function () { updateSummary(form); });
+            field.addEventListener('change', function () { updateSummary(form); });
+        });
+        refresh();
+    }
+
+    function selectedText(select) {
+        if (!select || select.selectedIndex < 0) {
+            return '';
+        }
+        return select.options[select.selectedIndex].textContent.trim();
+    }
+
+    function updateSummary(form) {
+        var name = ['last_name', 'middle_name', 'first_name'].map(function (field) {
+            var input = form.elements[field];
+            return input ? input.value.trim() : '';
+        }).filter(Boolean).join(' ');
+        var nameTarget = form.querySelector('[data-summary-name]');
+        if (nameTarget) {
+            nameTarget.textContent = name || 'Nouvel agent';
+        }
+
+        var position = form.elements.position_id;
+        var department = form.elements.department_id;
+        var assignmentTarget = form.querySelector('[data-summary-assignment]');
+        if (assignmentTarget) {
+            assignmentTarget.textContent = selectedText(position) || selectedText(department) || 'Completez son affectation';
+        }
+
+        var type = form.elements.contract_type;
+        var salary = parseFloat(form.elements.base_salary ? form.elements.base_salary.value : 0) || 0;
+        var currency = form.elements.currency ? form.elements.currency.value : 'USD';
+        var date = form.elements.hire_date ? form.elements.hire_date.value : '';
+        var contractTarget = form.querySelector('[data-contract-summary]');
+        if (contractTarget) {
+            contractTarget.textContent = (selectedText(type) || 'Contrat') + (date ? ' — a partir du ' + date.split('-').reverse().join('/') : '') + ' — ' + salary.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' ' + currency + '/mois';
+        }
+
+        var initials = form.querySelector('[data-photo-initials]');
+        if (initials) {
+            var first = form.elements.first_name ? form.elements.first_name.value.trim().charAt(0) : '';
+            var last = form.elements.last_name ? form.elements.last_name.value.trim().charAt(0) : '';
+            initials.textContent = (first + last).toUpperCase() || 'A';
+        }
+    }
+
+    function bindPhoto(form) {
+        var input = form.querySelector('[data-photo-input]');
+        var preview = form.querySelector('[data-photo-preview]');
+        var initials = form.querySelector('[data-photo-initials]');
+        if (!input || !preview) {
+            return;
+        }
+
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            if (!file) {
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                input.value = '';
+                window.ElliotUI.toast('La photo ne doit pas depasser 10 Mo.', 'danger');
+                return;
+            }
+            preview.src = URL.createObjectURL(file);
+            preview.classList.remove('d-none');
+            if (initials) {
+                initials.classList.add('d-none');
+            }
+        });
+    }
+
+    function bindSectionNavigation(form) {
+        var links = form.querySelectorAll('[data-section-link]');
+        var sections = form.querySelectorAll('[data-form-section]');
+
+        links.forEach(function (link) {
+            link.addEventListener('click', function () {
+                var section = document.getElementById(link.getAttribute('data-section-link'));
+                if (!section) {
+                    return;
+                }
+                if (section.tagName === 'DETAILS') {
+                    section.open = true;
+                }
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        if ('IntersectionObserver' in window) {
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) {
+                        return;
+                    }
+                    links.forEach(function (link) {
+                        link.classList.toggle('is-active', link.getAttribute('data-section-link') === entry.target.id);
+                    });
+                });
+            }, { rootMargin: '-20% 0px -65% 0px', threshold: 0 });
+            sections.forEach(function (section) { observer.observe(section); });
+        }
+    }
+
+    function bindFormExperience(form) {
+        bindOrganization(form);
+        bindContract(form);
+        bindPhoto(form);
+        bindSectionNavigation(form);
+
+        form.querySelectorAll('[data-summary-source]').forEach(function (field) {
+            field.addEventListener('input', function () { updateSummary(form); });
+        });
+        form.querySelectorAll('.employee-optional-section').forEach(function (section) {
+            section.addEventListener('toggle', function () {
+                var label = section.querySelector('.optional-toggle');
+                if (label) {
+                    label.textContent = section.open ? 'Masquer' : 'Afficher';
+                }
+            });
+        });
+
+        var dirty = false;
+        form.addEventListener('input', function () { dirty = true; });
+        form.addEventListener('change', function () { dirty = true; });
+        form.addEventListener('submit', function () { dirty = false; });
+        window.addEventListener('beforeunload', function (event) {
+            if (!dirty) {
+                return;
+            }
+            event.preventDefault();
+            event.returnValue = '';
+        });
+
+        form.addEventListener('keydown', function (event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                form.requestSubmit();
+            }
+        });
+        updateSummary(form);
     }
 
     function bindForms() {
         document.querySelectorAll('[data-employee-form]').forEach(function (form) {
+            bindFormExperience(form);
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
 
@@ -113,7 +349,7 @@
                             window.location.reload();
                         }
                     })
-                    .catch(function (error) {
+                    .catch(function () {
                         showError(form, errorBox, 'Erreur reseau. Reessayez dans un instant.');
                     })
                     .finally(function () {

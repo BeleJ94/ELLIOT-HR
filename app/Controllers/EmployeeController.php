@@ -47,7 +47,7 @@ class EmployeeController extends Controller
         $defaultCompanyId = $scope ?? (int) ($options['companies'][0]['id'] ?? 0);
 
         $this->view('employees.create', [
-            'title' => 'Nouvel employe',
+            'title' => 'Nouvel agent',
             'employee' => [
                 'company_id' => $defaultCompanyId,
                 'employee_number' => $defaultCompanyId > 0 ? $this->employees->generateEmployeeNumber($defaultCompanyId) : '',
@@ -294,6 +294,21 @@ class EmployeeController extends Controller
             }
         }
 
+        $contractType = $data['contract_type'] ?? 'cdi';
+        $contractEndDate = trim($data['contract_end_date'] ?? '');
+        if (!in_array($contractType, ['cdi', 'cdd', 'consultant', 'internship', 'temporary'], true)) {
+            $errors['contract_type'] = 'Type de contrat invalide.';
+        }
+        if (in_array($contractType, ['cdd', 'internship', 'temporary'], true) && $contractEndDate === '') {
+            $errors['contract_end_date'] = 'Date de fin obligatoire pour ce type de contrat.';
+        }
+
+        if ($contractEndDate !== '' && !$this->validDate($contractEndDate)) {
+            $errors['contract_end_date'] = 'Date de fin invalide.';
+        } elseif ($contractEndDate !== '' && !empty($data['hire_date']) && $contractEndDate < $data['hire_date']) {
+            $errors['contract_end_date'] = 'La date de fin doit etre posterieure a la date d’embauche.';
+        }
+
         return $errors;
     }
 
@@ -388,6 +403,13 @@ class EmployeeController extends Controller
     private function nullableInt($value): ?int
     {
         return $value === null || $value === '' ? null : (int) $value;
+    }
+
+    private function validDate(string $value): bool
+    {
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date !== false && $date->format('Y-m-d') === $value;
     }
 
     private function jsonError(string $message, int $status = 400, array $errors = []): void
