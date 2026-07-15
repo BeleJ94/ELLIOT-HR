@@ -38,3 +38,4 @@ jobs:
           sudo find . -type f -exec chmod 644 {} \;
 
           echo "✅ Déploiement terminé avec succès !"
+          
