@@ -355,8 +355,12 @@ class EmployeeController extends Controller
         $target = BASE_PATH . '/public/' . $relative;
         $targetDir = dirname($target);
 
-        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0777, true) && !is_dir($targetDir)) {
             throw new \RuntimeException('Impossible de creer le dossier upload.');
+        }
+
+        if (!is_writable($targetDir)) {
+            throw new \RuntimeException('Le dossier upload existe mais le serveur web ne peut pas y ecrire.');
         }
 
         if (!move_uploaded_file($file['tmp_name'], $target)) {
