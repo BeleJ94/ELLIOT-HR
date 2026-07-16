@@ -71,6 +71,35 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function exportReport(): void
+    {
+        $month = (string) ($_GET['month'] ?? date('Y-m'));
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+
+        $filters = $this->applyEmployeeSelfScope([
+            'month' => $month,
+            'employee_id' => $_GET['employee_id'] ?? null,
+            'department_id' => $_GET['department_id'] ?? null,
+        ]);
+        $rows = $this->attendance->monthlyReport($this->companyScope(), $filters);
+        $days = $this->attendance->reportCalendarDays($month);
+
+        Auth::log('attendance_monthly_report_exported', $this->companyScope(), Auth::id(), [
+            'month' => $month,
+            'employee_id' => $filters['employee_id'],
+            'department_id' => $filters['department_id'],
+            'employees' => count($rows),
+        ]);
+
+        $filename = 'rapport-presences-' . $month . '.xls';
+        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: max-age=0, no-cache, no-store, must-revalidate');
+        echo "\xEF\xBB\xBF" . $this->attendanceExcel($month, $days, $rows);
+    }
+
     public function checkIn(): void
     {
         $this->checkpoint('in');
@@ -449,5 +478,60 @@ class AttendanceController extends Controller
             'message' => $message,
             'errors' => $errors,
         ], $status);
+    }
+
+    private function attendanceExcel(string $month, array $days, array $rows): string
+    {
+        $statusMeta = [
+            'present' => ['P', 'Présent', 'present'],
+            'late' => ['R', 'Retard', 'late'],
+            'absent' => ['A', 'Absent', 'absent'],
+            'half_day' => ['½', 'Demi-journée', 'half'],
+            'leave' => ['C', 'Congé', 'leave'],
+            'holiday' => ['F', 'Jour férié', 'holiday'],
+        ];
+        $columnCount = 3 + count($days) + 5;
+        $periodLabel = date('m/Y', strtotime($month . '-01'));
+        $companyLabel = count($rows) === 1
+            ? (string) ($rows[0]['company_name'] ?? 'ELLIOT-HR')
+            : 'Périmètre autorisé';
+
+        $html = '<!doctype html><html><head><meta charset="utf-8"><style>';
+        $html .= '@page{mso-page-orientation:landscape;margin:.35in}.sheet{font-family:Arial,sans-serif;color:#243143;border-collapse:collapse}.title{background:#163a63;color:#fff;font-size:20px;font-weight:bold;height:38px;text-align:left}.subtitle{background:#eaf2fb;color:#37516f;font-size:11px;height:25px;text-align:left}.legend{background:#f7f9fc;color:#526174;font-size:10px;height:24px;text-align:left}.head{background:#dce8f5;color:#213b5b;font-size:9px;font-weight:bold;text-align:center;border:1px solid #9fb4cc;height:34px}.identity{background:#eef4fa;text-align:left}.day-head{width:34px}.weekend{background:#edf0f4;color:#8b96a5}.today{background:#d6e9ff;color:#15599c}.cell{border:1px solid #ccd6e2;height:25px;text-align:center;font-size:10px}.agent{text-align:left;font-weight:bold;min-width:155px}.muted{text-align:left;color:#68788d}.present{background:#e5f5ea;color:#176b37;font-weight:bold}.late{background:#fff0d2;color:#9a5900;font-weight:bold}.absent{background:#fbe4e6;color:#ae2530;font-weight:bold}.half{background:#eee6fa;color:#68409a;font-weight:bold}.leave{background:#e3f0fb;color:#145b94;font-weight:bold}.holiday{background:#e8eef3;color:#426078;font-weight:bold}.unrecorded{background:#fff;color:#7e8998}.future{background:#fafbfc;color:#b6bec8}.total{background:#f1f5f9;font-weight:bold}.rate{background:#eaf2fb;color:#15599c;font-weight:bold}.footer{color:#778395;font-size:9px;text-align:left;height:26px}</style></head><body>';
+        $html .= '<table class="sheet"><tr><td class="title" colspan="' . $columnCount . '">RAPPORT MENSUEL DES PRÉSENCES</td></tr>';
+        $html .= '<tr><td class="subtitle" colspan="' . $columnCount . '">Période : ' . e($periodLabel) . ' &nbsp;|&nbsp; Organisation : ' . e($companyLabel) . ' &nbsp;|&nbsp; Agents : ' . count($rows) . '</td></tr>';
+        $html .= '<tr><td class="legend" colspan="' . $columnCount . '">Légende : P Présent · R Retard · A Absent · ½ Demi-journée · C Congé · F Férié · ? Non encodé · — Week-end / futur</td></tr>';
+        $html .= '<tr><th class="head identity">Agent</th><th class="head identity">Matricule</th><th class="head identity">Département</th>';
+        foreach ($days as $day) {
+            $classes = 'head day-head' . ($day['is_weekend'] ? ' weekend' : '') . ($day['is_today'] ? ' today' : '');
+            $html .= '<th class="' . $classes . '">' . e($day['weekday_label']) . '<br>' . str_pad((string) $day['day'], 2, '0', STR_PAD_LEFT) . '</th>';
+        }
+        $html .= '<th class="head">P</th><th class="head">R</th><th class="head">A</th><th class="head">N/E</th><th class="head">Taux</th></tr>';
+
+        foreach ($rows as $row) {
+            $name = trim(($row['last_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['first_name'] ?? ''));
+            $items = $row['days'] ?? [];
+            $html .= '<tr><td class="cell agent">' . e($name) . '</td><td class="cell muted">' . e($row['employee_number'] ?? '-') . '</td><td class="cell muted">' . e($row['department_name'] ?? '-') . '</td>';
+            foreach ($days as $day) {
+                $entry = $items[$day['date']] ?? null;
+                $status = $entry['status'] ?? null;
+                $meta = $statusMeta[$status] ?? null;
+                $class = $meta[2] ?? (!empty($day['is_future']) ? 'future' : (!empty($day['is_weekend']) ? 'weekend' : 'unrecorded'));
+                $code = $meta[0] ?? (!empty($day['is_future']) || !empty($day['is_weekend']) ? '—' : '?');
+                $html .= '<td class="cell ' . $class . '">' . e($code) . '</td>';
+            }
+            $html .= '<td class="cell total">' . (int) ($row['present_days'] ?? 0) . '</td>';
+            $html .= '<td class="cell total">' . (int) ($row['late_days'] ?? 0) . '</td>';
+            $html .= '<td class="cell total">' . (int) ($row['absent_days'] ?? 0) . '</td>';
+            $html .= '<td class="cell total">' . (int) ($row['unrecorded_days'] ?? 0) . '</td>';
+            $html .= '<td class="cell rate">' . (int) ($row['presence_rate'] ?? 0) . '%</td></tr>';
+        }
+
+        if ($rows === []) {
+            $html .= '<tr><td class="cell muted" colspan="' . $columnCount . '">Aucune donnée pour les filtres sélectionnés.</td></tr>';
+        }
+        $html .= '<tr><td class="footer" colspan="' . $columnCount . '">Document généré le ' . e(date('d/m/Y à H:i')) . ' par ELLIOT-HR · Données confidentielles</td></tr></table></body></html>';
+
+        return $html;
     }
 }

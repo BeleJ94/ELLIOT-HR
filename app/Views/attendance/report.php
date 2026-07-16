@@ -21,6 +21,11 @@ $statusMeta = [
     'leave' => ['code' => 'C', 'label' => 'Congé', 'tone' => 'leave'],
     'holiday' => ['code' => 'F', 'label' => 'Jour férié', 'tone' => 'holiday'],
 ];
+$exportQuery = http_build_query(array_filter([
+    'month' => $month,
+    'employee_id' => $filters['employee_id'] ?? null,
+    'department_id' => $filters['department_id'] ?? null,
+], static fn($value): bool => $value !== null && $value !== ''));
 ?>
 
 <div class="module-header module-header-rich">
@@ -87,11 +92,16 @@ $statusMeta = [
         <button class="is-active" type="button" role="tab" aria-selected="true" data-report-view="calendar"><?= icon('calendar') ?><span>Vue calendrier</span></button>
         <button type="button" role="tab" aria-selected="false" data-report-view="summary"><?= icon('chart') ?><span>Vue synthèse</span></button>
     </div>
-    <div class="attendance-report-legend" aria-label="Légende des statuts">
-        <?php foreach ($statusMeta as $meta): ?>
-            <span><i class="attendance-day-badge is-<?= e($meta['tone']) ?>"><?= e($meta['code']) ?></i><?= e($meta['label']) ?></span>
-        <?php endforeach; ?>
-        <span><i class="attendance-day-badge is-unrecorded">?</i>Non encodé</span>
+    <div class="attendance-report-tools">
+        <div class="attendance-report-legend" aria-label="Légende des statuts">
+            <?php foreach ($statusMeta as $meta): ?>
+                <span><i class="attendance-day-badge is-<?= e($meta['tone']) ?>"><?= e($meta['code']) ?></i><?= e($meta['label']) ?></span>
+            <?php endforeach; ?>
+            <span><i class="attendance-day-badge is-unrecorded">?</i>Non encodé</span>
+        </div>
+        <a class="btn btn-success attendance-excel-button" href="<?= e(url('/attendance/report/export') . '?' . $exportQuery) ?>" data-calendar-export>
+            <?= icon('file') ?><span>Exporter Excel</span>
+        </a>
     </div>
 </div>
 
@@ -142,9 +152,33 @@ $statusMeta = [
                             if ($entry && !empty($entry['notes'])) {
                                 $detail .= ' · ' . $entry['notes'];
                             }
+                            $workedLabel = '—';
+                            if ($entry && !empty($entry['check_in']) && !empty($entry['check_out'])) {
+                                $startTime = strtotime('2000-01-01 ' . $entry['check_in']);
+                                $endTime = strtotime('2000-01-01 ' . $entry['check_out']);
+                                if ($endTime > $startTime) {
+                                    $workedLabel = $attendance
+                                        ? $attendance->formatMinutes((int) floor(($endTime - $startTime) / 60))
+                                        : '—';
+                                }
+                            }
                             ?>
                             <td class="matrix-day-cell <?= $day['is_today'] ? 'is-today' : '' ?>">
-                                <span class="attendance-day-badge is-<?= e($cellTone) ?>" title="<?= e($day['weekday_label'] . ' ' . str_pad((string) $day['day'], 2, '0', STR_PAD_LEFT) . ' : ' . $detail) ?>" aria-label="<?= e($detail) ?>"><?= e($cellCode) ?></span>
+                                <button type="button" class="attendance-day-badge is-<?= e($cellTone) ?>" data-attendance-detail
+                                    data-employee="<?= e($employeeName) ?>"
+                                    data-number="<?= e($row['employee_number'] ?? '-') ?>"
+                                    data-department="<?= e($row['department_name'] ?? '-') ?>"
+                                    data-position="<?= e($row['position_title'] ?? '-') ?>"
+                                    data-date="<?= e(date('d/m/Y', strtotime($day['date']))) ?>"
+                                    data-weekday="<?= e($day['weekday_label']) ?>"
+                                    data-status="<?= e($meta['label'] ?? ($day['is_future'] ? 'Date future' : ($day['is_weekend'] ? 'Week-end' : 'Non encodé'))) ?>"
+                                    data-tone="<?= e($cellTone) ?>"
+                                    data-code="<?= e($cellCode) ?>"
+                                    data-check-in="<?= e($entry && !empty($entry['check_in']) ? substr((string) $entry['check_in'], 0, 5) : '—') ?>"
+                                    data-check-out="<?= e($entry && !empty($entry['check_out']) ? substr((string) $entry['check_out'], 0, 5) : '—') ?>"
+                                    data-worked="<?= e($workedLabel) ?>"
+                                    data-notes="<?= e($entry['notes'] ?? '') ?>"
+                                    title="Voir le détail · <?= e($detail) ?>" aria-label="Voir le détail de <?= e($employeeName . ' pour le ' . $day['date']) ?>"><?= e($cellCode) ?></button>
                             </td>
                         <?php endforeach; ?>
                         <td class="matrix-total-cell is-present"><?= e((string) ($row['present_days'] ?? 0)) ?></td>
@@ -208,6 +242,35 @@ $statusMeta = [
             </tbody>
         </table>
     </div>
+</div>
+
+<div class="attendance-detail-modal" data-attendance-detail-modal aria-hidden="true">
+    <div class="attendance-detail-backdrop" data-attendance-detail-close></div>
+    <section class="attendance-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="attendance-detail-title">
+        <header class="attendance-detail-header">
+            <div class="attendance-detail-date-icon"><span data-detail-weekday>—</span><strong data-detail-day>—</strong></div>
+            <div>
+                <span class="dashboard-section-kicker">Détail journalier</span>
+                <h2 id="attendance-detail-title" data-detail-employee>Agent</h2>
+                <p><span data-detail-number>—</span> · <span data-detail-department>—</span></p>
+            </div>
+            <button type="button" class="attendance-detail-close" data-attendance-detail-close aria-label="Fermer">×</button>
+        </header>
+        <div class="attendance-detail-status-row">
+            <span class="attendance-day-badge" data-detail-badge>—</span>
+            <div><small>Statut de la journée</small><strong data-detail-status>—</strong></div>
+        </div>
+        <div class="attendance-detail-times">
+            <article><small>Entrée</small><strong data-detail-in>—</strong></article>
+            <article><small>Sortie</small><strong data-detail-out>—</strong></article>
+            <article><small>Temps travaillé</small><strong data-detail-worked>—</strong></article>
+        </div>
+        <div class="attendance-detail-note" data-detail-note-box>
+            <small>Observation</small>
+            <p data-detail-notes>Aucune observation enregistrée.</p>
+        </div>
+        <footer><button type="button" class="btn btn-outline" data-attendance-detail-close>Fermer</button></footer>
+    </section>
 </div>
 
 <script>

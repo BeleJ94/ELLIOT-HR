@@ -72,6 +72,7 @@ $router->post('/attendance/day/close', [AttendanceController::class, 'closeDay']
 $router->post('/attendance/day/lock', [AttendanceController::class, 'lockDay'], $attendanceAccess);
 $router->post('/attendance/day/reopen', [AttendanceController::class, 'reopenDay'], $attendanceAccess);
 $router->get('/attendance/report', [AttendanceController::class, 'report'], $attendanceAccess);
+$router->get('/attendance/report/export', [AttendanceController::class, 'exportReport'], $attendanceAccess);
 $router->get('/leaves', [LeaveController::class, 'index'], $leaveAccess);
 $router->get('/leaves/create', [LeaveController::class, 'create'], $leaveAccess);
 $router->post('/leaves/store', [LeaveController::class, 'store'], $leaveAccess);

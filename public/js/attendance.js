@@ -416,6 +416,64 @@
         activate(saved === 'summary' ? 'summary' : 'calendar');
     }
 
+    function bindAttendanceDetails() {
+        var modal = document.querySelector('[data-attendance-detail-modal]');
+        var triggers = Array.prototype.slice.call(document.querySelectorAll('[data-attendance-detail]'));
+        if (!modal || !triggers.length) return;
+        var lastTrigger = null;
+        var badgeTones = ['present', 'late', 'absent', 'half-day', 'leave', 'holiday', 'unrecorded', 'weekend', 'future'];
+
+        function setText(selector, value) {
+            var node = modal.querySelector(selector);
+            if (node) node.textContent = value || '—';
+        }
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+            if (lastTrigger) lastTrigger.focus();
+        }
+
+        function openModal(trigger) {
+            lastTrigger = trigger;
+            var values = trigger.dataset;
+            setText('[data-detail-weekday]', values.weekday);
+            setText('[data-detail-day]', values.date);
+            setText('[data-detail-employee]', values.employee);
+            setText('[data-detail-number]', values.number);
+            setText('[data-detail-department]', values.department + (values.position && values.position !== '-' ? ' · ' + values.position : ''));
+            setText('[data-detail-status]', values.status);
+            setText('[data-detail-in]', values.checkIn);
+            setText('[data-detail-out]', values.checkOut);
+            setText('[data-detail-worked]', values.worked);
+            setText('[data-detail-notes]', values.notes || 'Aucune observation enregistrée.');
+
+            var badge = modal.querySelector('[data-detail-badge]');
+            if (badge) {
+                badgeTones.forEach(function (tone) { badge.classList.remove('is-' + tone); });
+                badge.classList.add('is-' + (values.tone || 'unrecorded'));
+                badge.textContent = values.code || '?';
+            }
+
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
+            var close = modal.querySelector('.attendance-detail-close');
+            if (close) close.focus();
+        }
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function () { openModal(trigger); });
+        });
+        modal.querySelectorAll('[data-attendance-detail-close]').forEach(function (button) {
+            button.addEventListener('click', closeModal);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         bindCheckpoint('[data-check-in-url]', 'data-check-in-url', 'in');
         bindCheckpoint('[data-check-out-url]', 'data-check-out-url', 'out');
@@ -423,5 +481,6 @@
         bindWorkspace();
         bindReportViews();
         bindReportTable();
+        bindAttendanceDetails();
     });
 })();
