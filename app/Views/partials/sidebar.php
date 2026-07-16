@@ -1,7 +1,18 @@
 <?php
 $sidebarUser = \App\Core\Auth::user() ?? [];
 $sidebarRole = $sidebarUser['role_slug'] ?? '';
-$can = static fn(array $roles): bool => in_array($sidebarRole, $roles, true);
+$can = static function (array $roles, string $path = '') use ($sidebarRole): bool {
+    $segment = explode('/', trim($path, '/'))[0] ?? '';
+    $permissionMap = [
+        'employees' => 'employees.manage', 'departments' => 'employees.manage', 'positions' => 'employees.manage',
+        'contracts' => 'contracts.manage', 'attendance' => 'attendance.manage', 'leaves' => 'leaves.manage',
+        'medical' => 'medical.manage', 'trainings' => 'trainings.manage', 'payroll' => 'payroll.manage',
+        'declarations' => 'declarations.manage',
+    ];
+    $override = isset($permissionMap[$segment]) ? \App\Core\Auth::permissionOverride($permissionMap[$segment]) : null;
+
+    return $override ?? in_array($sidebarRole, $roles, true);
+};
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
 if ($scriptDir !== '/' && strpos($currentPath, $scriptDir) === 0) {
@@ -103,7 +114,7 @@ $navGroups = [
         <nav class="navbar-collapse" aria-label="Navigation principale">
             <?php foreach ($navGroups as $group): ?>
                 <?php
-                $visibleItems = array_values(array_filter($group['items'], static fn(array $item): bool => $can($item['roles'])));
+                $visibleItems = array_values(array_filter($group['items'], static fn(array $item): bool => $can($item['roles'], $item['path'] ?? '')));
                 if ($visibleItems === []) {
                     continue;
                 }
@@ -118,7 +129,7 @@ $navGroups = [
                     <ul class="navbar-nav">
                         <?php foreach ($visibleItems as $item): ?>
                             <?php
-                            $children = array_values(array_filter($item['children'] ?? [], static fn(array $child): bool => $can($child['roles'] ?? $item['roles'])));
+                            $children = array_values(array_filter($item['children'] ?? [], static fn(array $child): bool => $can($child['roles'] ?? $item['roles'], $child['path'] ?? '')));
                             $isActive = $isNavActive($item);
                             ?>
                             <li class="nav-item <?= $isActive ? 'active' : '' ?> <?= $children !== [] ? 'has-children' : '' ?>">

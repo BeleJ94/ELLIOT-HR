@@ -77,6 +77,32 @@ class Auth
             || in_array($user['role_name'] ?? '', $roles, true);
     }
 
+    public static function permissionOverride(string $slug): ?bool
+    {
+        $user = self::user();
+        if (!$user || empty($user['id'])) {
+            return null;
+        }
+        if (($user['role_slug'] ?? '') === 'super-admin') {
+            return true;
+        }
+        try {
+            $effect = Database::query(
+                'SELECT user_permissions.effect
+                 FROM user_permissions
+                 INNER JOIN permissions ON permissions.id = user_permissions.permission_id
+                 WHERE user_permissions.user_id = :user_id AND permissions.slug = :slug
+                 AND user_permissions.deleted_at IS NULL AND permissions.deleted_at IS NULL LIMIT 1',
+                ['user_id' => (int) $user['id'], 'slug' => $slug]
+            )->fetchColumn();
+            return $effect === 'allow' ? true : ($effect === 'deny' ? false : null);
+        } catch (Throwable $exception) {
+            // Compatibilite pendant le deploiement precedant l'execution de la migration.
+            error_log($exception->getMessage());
+            return null;
+        }
+    }
+
     public static function log(string $action, ?int $companyId = null, ?int $userId = null, array $data = []): void
     {
         try {

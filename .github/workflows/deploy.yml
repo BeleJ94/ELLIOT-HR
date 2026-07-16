@@ -54,6 +54,13 @@ jobs:
           cp "$ENV_BACKUP" .env
           rm -f "$ENV_BACKUP"
           cp /tmp/.htaccess.bak .htaccess 2>/dev/null || echo "⚠️ Pas de .htaccess à restaurer"
+
+          # Migration idempotente du système de délégation des permissions
+          echo "🗄️ Mise à jour du schéma des permissions..."
+          if ! php scripts/migrate_user_permission_delegation.php; then
+            echo "❌ La migration des permissions a échoué."
+            exit 1
+          fi
           
           # Permissions
           echo "🔧 Correction des permissions..."

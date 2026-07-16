@@ -12,7 +12,10 @@ class RoleMiddleware
             return (new AuthMiddleware())->handle();
         }
 
-        if ($roles === [] || Auth::hasRole($roles)) {
+        $permission = $this->requestPermission();
+        $override = $permission !== null ? Auth::permissionOverride($permission) : null;
+
+        if ($override === true || ($override === null && ($roles === [] || Auth::hasRole($roles)))) {
             return true;
         }
 
@@ -29,6 +32,23 @@ class RoleMiddleware
 
         echo 'Acces refuse';
         return false;
+    }
+
+    private function requestPermission(): ?string
+    {
+        $path = trim((string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/'), '/');
+        $basePath = trim(current_request_base_path(), '/');
+        if ($basePath !== '' && ($path === $basePath || strpos($path, $basePath . '/') === 0)) {
+            $path = ltrim(substr($path, strlen($basePath)), '/');
+        }
+        $segment = explode('/', $path)[0] ?? '';
+        $map = [
+            'employees' => 'employees.manage', 'departments' => 'employees.manage', 'positions' => 'employees.manage',
+            'contracts' => 'contracts.manage', 'attendance' => 'attendance.manage', 'leaves' => 'leaves.manage',
+            'medical' => 'medical.manage', 'trainings' => 'trainings.manage', 'payroll' => 'payroll.manage',
+            'declarations' => 'declarations.manage',
+        ];
+        return $map[$segment] ?? null;
     }
 
     private function expectsJson(): bool

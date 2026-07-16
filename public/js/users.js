@@ -112,6 +112,8 @@
         var form = document.querySelector('[data-user-form]');
         var passwordModal = document.querySelector('[data-password-modal]');
         var passwordForm = document.querySelector('[data-password-form]');
+        var permissionModal = document.querySelector('[data-permission-modal]');
+        var permissionForm = document.querySelector('[data-permission-form]');
         if (!modal || !form || !passwordModal || !passwordForm) {
             return;
         }
@@ -148,6 +150,87 @@
             modalState(modal, true);
         }
 
+        function renderPermissions(data, mode) {
+            var container = permissionModal.querySelector('[data-permission-groups]');
+            var groups = {};
+            (data.permissions || []).forEach(function (permission) {
+                var module = permission.module || 'autres';
+                if (!groups[module]) groups[module] = [];
+                groups[module].push(permission);
+            });
+            container.innerHTML = '';
+            Object.keys(groups).forEach(function (module) {
+                var section = document.createElement('section');
+                section.className = 'permission-group';
+                var heading = document.createElement('div');
+                heading.className = 'permission-group-heading';
+                var title = document.createElement('strong');
+                title.textContent = module.replace(/[-_]/g, ' ');
+                var count = document.createElement('span');
+                count.textContent = groups[module].length + ' droit(s)';
+                heading.appendChild(title); heading.appendChild(count); section.appendChild(heading);
+
+                groups[module].forEach(function (permission) {
+                    var row = document.createElement('label');
+                    row.className = 'permission-option';
+                    row.dataset.permissionSearch = (permission.name + ' ' + permission.slug + ' ' + (permission.description || '')).toLocaleLowerCase();
+                    var copy = document.createElement('span');
+                    var name = document.createElement('strong'); name.textContent = permission.name;
+                    var description = document.createElement('small'); description.textContent = permission.description || permission.slug;
+                    copy.appendChild(name); copy.appendChild(description);
+                    if (mode === 'delegation') {
+                        var checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox'; checkbox.name = 'permission_id'; checkbox.value = permission.id;
+                        checkbox.checked = (data.selected || []).map(Number).indexOf(Number(permission.id)) !== -1;
+                        row.appendChild(checkbox); row.appendChild(copy);
+                    } else {
+                        row.appendChild(copy);
+                        var control = document.createElement('select');
+                        control.className = 'form-select form-select-sm'; control.name = 'permission_effect'; control.dataset.permissionId = permission.id;
+                        [['inherit', permission.role_granted ? 'Hériter du rôle (autorisé)' : 'Hériter du rôle (non autorisé)'], ['allow', 'Autoriser'], ['deny', 'Refuser']].forEach(function (item) {
+                            var option = document.createElement('option'); option.value = item[0]; option.textContent = item[1];
+                            option.selected = permission.effect === item[0]; control.appendChild(option);
+                        });
+                        row.appendChild(control);
+                    }
+                    section.appendChild(row);
+                });
+                container.appendChild(section);
+            });
+            if (!Object.keys(groups).length) {
+                container.innerHTML = '<div class="dashboard-empty">Aucune permission ne vous a été déléguée.</div>';
+            }
+        }
+
+        function openPermissionAccess(id, mode) {
+            permissionForm.reset();
+            setField(permissionForm, 'id', id);
+            setField(permissionForm, 'mode', mode);
+            permissionModal.querySelector('[data-permission-error]').classList.add('d-none');
+            permissionModal.querySelector('[data-permission-groups]').innerHTML = '<div class="dashboard-empty">Chargement…</div>';
+            permissionModal.querySelector('[data-permission-title]').textContent = mode === 'delegation' ? 'Déléguer la gestion des droits' : 'Permissions individuelles';
+            permissionModal.querySelector('[data-permission-kicker]').textContent = mode === 'delegation' ? 'Contrôle super-admin' : 'Accès utilisateur';
+            permissionModal.querySelector('[data-permission-notice]').textContent = mode === 'delegation'
+                ? 'Cet administrateur RH ne pourra attribuer que les permissions sélectionnées.'
+                : 'Autoriser ou refuser explicitement un droit, ou conserver les droits du rôle.';
+            permissionModal.querySelector('[data-permission-select-all]').hidden = mode !== 'delegation';
+            modalState(permissionModal, true);
+
+            fetch(window.ELLIOT_USER_URLS.permissionData + '?id=' + encodeURIComponent(id) + '&mode=' + encodeURIComponent(mode), {
+                headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'
+            }).then(function (response) {
+                return response.json().then(function (payload) { payload.httpOk = response.ok; return payload; });
+            }).then(function (payload) {
+                if (!payload.httpOk || !payload.success) throw new Error(payload.message || 'Chargement impossible.');
+                var user = payload.data.user || {};
+                permissionModal.querySelector('[data-permission-subtitle]').textContent = (user.first_name || '') + ' ' + (user.last_name || '') + ' · ' + (user.company_name || user.email || '');
+                renderPermissions(payload.data, mode);
+            }).catch(function (error) {
+                var box = permissionModal.querySelector('[data-permission-error]');
+                box.textContent = error.message; box.classList.remove('d-none');
+            });
+        }
+
         document.querySelector('[data-user-create]').addEventListener('click', openCreate);
         document.querySelectorAll('[data-user-modal-close]').forEach(function (button) {
             button.addEventListener('click', function () { modalState(modal, false); });
@@ -165,6 +248,12 @@
             var reset = event.target.closest('[data-user-password]');
             var toggle = event.target.closest('[data-user-toggle-status]');
             var remove = event.target.closest('[data-user-delete]');
+            var access = event.target.closest('[data-user-access]');
+
+            if (access) {
+                openPermissionAccess(access.getAttribute('data-user-access'), access.getAttribute('data-access-mode') || 'permissions');
+                return;
+            }
 
             if (edit) {
                 var data = decodePayload(edit.getAttribute('data-user-edit'));
@@ -238,6 +327,41 @@
         document.querySelectorAll('[data-password-modal-close]').forEach(function (button) {
             button.addEventListener('click', function () { modalState(passwordModal, false); });
         });
+        document.querySelectorAll('[data-permission-modal-close]').forEach(function (button) {
+            button.addEventListener('click', function () { modalState(permissionModal, false); });
+        });
+        permissionModal.querySelector('[data-permission-search]').addEventListener('input', function (event) {
+            var term = event.target.value.trim().toLocaleLowerCase();
+            permissionModal.querySelectorAll('[data-permission-search]').forEach(function (row) {
+                if (row.tagName !== 'INPUT') row.hidden = term !== '' && row.dataset.permissionSearch.indexOf(term) === -1;
+            });
+        });
+        permissionModal.querySelector('[data-permission-select-all]').addEventListener('click', function () {
+            var boxes = Array.prototype.slice.call(permissionModal.querySelectorAll('input[name="permission_id"]'));
+            var select = boxes.some(function (box) { return !box.checked; });
+            boxes.forEach(function (box) { box.checked = select; });
+        });
+        permissionForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var mode = permissionForm.querySelector('[name="mode"]').value;
+            var data = new FormData(permissionForm);
+            if (mode === 'delegation') {
+                data.set('permission_ids', JSON.stringify(Array.prototype.slice.call(permissionForm.querySelectorAll('input[name="permission_id"]:checked')).map(function (box) { return Number(box.value); })));
+            } else {
+                var effects = {};
+                permissionForm.querySelectorAll('[data-permission-id]').forEach(function (select) { effects[select.dataset.permissionId] = select.value; });
+                data.set('effects', JSON.stringify(effects));
+            }
+            var submit = permissionForm.querySelector('[data-permission-submit]');
+            var box = permissionModal.querySelector('[data-permission-error]');
+            submit.disabled = true; box.classList.add('d-none');
+            request(mode === 'delegation' ? window.ELLIOT_USER_URLS.saveDelegations : window.ELLIOT_USER_URLS.savePermissions, data)
+                .then(function (payload) {
+                    if (!payload.httpOk || !payload.success) { box.textContent = payload.message || 'Enregistrement impossible.'; box.classList.remove('d-none'); return; }
+                    modalState(permissionModal, false);
+                    if (window.ElliotUI) window.ElliotUI.toast(payload.message, 'success');
+                }).finally(function () { submit.disabled = false; });
+        });
         passwordForm.addEventListener('submit', function (event) {
             event.preventDefault();
             var submit = passwordForm.querySelector('[data-submit-label]');
@@ -283,6 +407,8 @@
             }
             if (passwordModal.classList.contains('is-open')) {
                 modalState(passwordModal, false);
+            } else if (permissionModal.classList.contains('is-open')) {
+                modalState(permissionModal, false);
             } else if (modal.classList.contains('is-open')) {
                 modalState(modal, false);
             }

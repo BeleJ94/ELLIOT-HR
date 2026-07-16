@@ -6,6 +6,7 @@ $options = $options ?? [];
 $isSuperAdmin = !empty($isSuperAdmin);
 $currentUserId = (int) ($currentUserId ?? 0);
 $defaultCompanyId = (int) ($defaultCompanyId ?? 0);
+$canDelegatePermissions = !empty($canDelegatePermissions);
 $statusLabels = ['active' => 'Actif', 'inactive' => 'Inactif', 'blocked' => 'Bloqué'];
 $statusTones = ['active' => 'green', 'inactive' => 'gray', 'blocked' => 'red'];
 $actionLabels = [
@@ -17,6 +18,8 @@ $actionLabels = [
     'user_status_changed' => 'Statut modifié',
     'user_password_reset' => 'Mot de passe réinitialisé',
     'user_deleted' => 'Compte supprimé',
+    'permission_delegation_updated' => 'Délégation modifiée',
+    'user_permissions_updated' => 'Permissions modifiées',
 ];
 $userPayload = static function (array $user): string {
     return base64_encode(json_encode([
@@ -128,6 +131,12 @@ $userPayload = static function (array $user): string {
                                     <div class="btn-list flex-nowrap">
                                         <button class="btn btn-icon" type="button" data-user-edit="<?= e($userPayload($user)) ?>" title="Modifier"><?= icon('settings') ?></button>
                                         <button class="btn btn-icon" type="button" data-user-password="<?= e((string) $user['id']) ?>" data-user-name="<?= e($name) ?>" title="Réinitialiser le mot de passe"><?= icon('key') ?></button>
+                                        <?php if ($isSuperAdmin && ($user['role_slug'] ?? '') === 'admin-rh'): ?>
+                                            <button class="btn btn-icon btn-outline-primary" type="button" data-user-access="<?= e((string) $user['id']) ?>" data-access-mode="delegation" title="Définir les permissions délégables"><?= icon('shield') ?></button>
+                                        <?php endif; ?>
+                                        <?php if ($canDelegatePermissions && !$isCurrent && ($user['role_slug'] ?? '') !== 'super-admin'): ?>
+                                            <button class="btn btn-icon btn-outline-info" type="button" data-user-access="<?= e((string) $user['id']) ?>" data-access-mode="permissions" title="Permissions individuelles"><?= icon('settings') ?></button>
+                                        <?php endif; ?>
                                         <?php if (!$isCurrent): ?>
                                             <button class="btn btn-icon <?= $status === 'blocked' ? 'btn-outline-success' : 'btn-outline-warning' ?>" type="button" data-user-toggle-status="<?= e((string) $user['id']) ?>" data-current-status="<?= e($status) ?>" title="<?= $status === 'blocked' ? 'Débloquer' : 'Bloquer' ?>"><?= $status === 'blocked' ? icon('check') : icon('lock') ?></button>
                                             <button class="btn btn-icon btn-outline-danger" type="button" data-user-delete="<?= e((string) $user['id']) ?>" data-user-name="<?= e($name) ?>" title="Supprimer"><?= icon('x') ?></button>
@@ -309,11 +318,52 @@ $userPayload = static function (array $user): string {
     </section>
 </div>
 
+<div class="user-modal permission-modal" data-permission-modal aria-hidden="true">
+    <div class="user-modal-backdrop" data-permission-modal-close></div>
+    <section class="user-modal-dialog permission-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-modal-title">
+        <div class="user-modal-header">
+            <div class="user-modal-heading">
+                <span class="user-modal-heading-icon"><?= icon('shield') ?></span>
+                <div>
+                    <span class="dashboard-section-kicker" data-permission-kicker>Délégation sécurisée</span>
+                    <h2 id="permission-modal-title" data-permission-title>Permissions</h2>
+                    <p data-permission-subtitle>Chargement du périmètre autorisé…</p>
+                </div>
+            </div>
+            <button class="btn btn-icon" type="button" data-permission-modal-close><?= icon('x') ?></button>
+        </div>
+        <form data-permission-form>
+            <?= csrf_field() ?>
+            <input type="hidden" name="id">
+            <input type="hidden" name="mode">
+            <div class="user-modal-body">
+                <div class="permission-security-notice"><?= icon('shield') ?><div><strong data-permission-notice-title>Périmètre contrôlé</strong><span data-permission-notice>Seules les autorisations affichées peuvent être attribuées.</span></div></div>
+                <div class="alert alert-danger d-none" data-permission-error></div>
+                <div class="permission-modal-toolbar">
+                    <div class="topbar-search"><span>⌕</span><input type="search" placeholder="Rechercher une permission" data-permission-search></div>
+                    <button class="btn btn-sm btn-outline" type="button" data-permission-select-all>Tout sélectionner</button>
+                </div>
+                <div class="permission-groups" data-permission-groups><div class="dashboard-empty">Chargement…</div></div>
+            </div>
+            <div class="user-modal-footer">
+                <div class="user-modal-footer-note"><?= icon('shield') ?><span>Chaque modification est enregistrée dans le journal d’audit.</span></div>
+                <div class="user-modal-footer-actions">
+                    <button class="btn btn-outline" type="button" data-permission-modal-close>Annuler</button>
+                    <button class="btn btn-primary" type="submit" data-permission-submit>Enregistrer</button>
+                </div>
+            </div>
+        </form>
+    </section>
+</div>
+
 <script>
 window.ELLIOT_CSRF = '<?= e(csrf_token()) ?>';
 window.ELLIOT_USER_URLS = {
     status: '<?= e(url('/users/status')) ?>',
-    delete: '<?= e(url('/users/delete')) ?>'
+    delete: '<?= e(url('/users/delete')) ?>',
+    permissionData: '<?= e(url('/users/permissions/data')) ?>',
+    saveDelegations: '<?= e(url('/users/delegations/save')) ?>',
+    savePermissions: '<?= e(url('/users/permissions/save')) ?>'
 };
 </script>
 <script src="<?= e(asset('js/users.js')) ?>"></script>

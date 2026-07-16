@@ -6547,6 +6547,76 @@ body.theme-light {
     font-weight: 800;
 }
 
+.permission-modal-dialog { width: min(760px, calc(100vw - 32px)); }
+
+.permission-security-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid #bfd6ef;
+    border-radius: 11px;
+    background: #f0f7ff;
+    color: #315a80;
+}
+.permission-security-notice .icon { width: 20px; flex: 0 0 auto; }
+.permission-security-notice strong,
+.permission-security-notice span { display: block; }
+.permission-security-notice strong { font-size: 11px; }
+.permission-security-notice span { margin-top: 2px; font-size: 9px; }
+
+.permission-modal-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.permission-modal-toolbar .topbar-search { width: 100%; }
+.permission-groups { display: grid; gap: 12px; }
+.permission-group {
+    overflow: hidden;
+    border: 1px solid #dfe5ed;
+    border-radius: 12px;
+    background: #fff;
+}
+.permission-group-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 13px;
+    border-bottom: 1px solid #e5eaf0;
+    background: #f5f8fc;
+}
+.permission-group-heading strong { color: #2b3c51; font-size: 11px; text-transform: capitalize; }
+.permission-group-heading span { color: #8490a1; font-size: 9px; }
+.permission-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    align-items: center;
+    gap: 14px;
+    min-height: 58px;
+    margin: 0;
+    padding: 10px 13px;
+    border-bottom: 1px solid #edf0f4;
+    cursor: pointer;
+}
+.permission-option:last-child { border-bottom: 0; }
+.permission-option:has(input[type="checkbox"]) { grid-template-columns: 22px minmax(0, 1fr); }
+.permission-option:hover { background: #fafcff; }
+.permission-option > span strong,
+.permission-option > span small { display: block; }
+.permission-option > span strong { color: #29384b; font-size: 11px; }
+.permission-option > span small { margin-top: 3px; color: #7d899b; font-size: 9px; }
+.permission-option input[type="checkbox"] { width: 17px; height: 17px; accent-color: #206bc4; }
+.permission-option .form-select { min-height: 34px; font-size: 10px; }
+
+@media (max-width: 575.98px) {
+    .permission-modal-dialog { width: 100%; }
+    .permission-modal-toolbar { grid-template-columns: 1fr; }
+    .permission-option { grid-template-columns: 1fr; gap: 8px; }
+}
+
 .role-permission-preview:not(.has-permissions) .permission-chip-list {
     display: none;
 }

@@ -30,6 +30,7 @@ class UserController extends Controller
             'isSuperAdmin' => $this->isSuperAdmin(),
             'currentUserId' => Auth::id(),
             'defaultCompanyId' => $scope ?? 0,
+            'canDelegatePermissions' => $this->isSuperAdmin() || ($scope !== null && $this->users->hasDelegations(Auth::id() ?? 0, $scope)),
         ]);
     }
 
@@ -135,6 +136,82 @@ class UserController extends Controller
         }
 
         $this->json(['success' => $deleted, 'message' => $deleted ? 'Compte utilisateur supprimé.' : 'Suppression impossible.']);
+    }
+
+    public function permissionData(): void
+    {
+        $id = $this->requestId();
+        $mode = (string) ($_GET['mode'] ?? 'permissions');
+        if ($mode === 'delegation') {
+            if (!$this->isSuperAdmin()) {
+                $this->jsonError('Cette délégation est réservée au super administrateur.', 403);
+                return;
+            }
+            $data = $this->users->delegationData($id);
+        } else {
+            $companyId = (int) ($this->companyScope() ?? 0);
+            $data = $this->users->permissionData($id, Auth::id() ?? 0, $this->isSuperAdmin(), $companyId);
+        }
+        if (!$data) {
+            $this->jsonError('Utilisateur introuvable ou périmètre non autorisé.', 404);
+            return;
+        }
+        $this->json(['success' => true, 'data' => $data]);
+    }
+
+    public function saveDelegations(): void
+    {
+        if (!$this->isSuperAdmin()) {
+            $this->jsonError('Action réservée au super administrateur.', 403);
+            return;
+        }
+        if (!$this->validCsrfToken()) {
+            $this->jsonError('Session invalide.', 419);
+            return;
+        }
+        $id = $this->requestId();
+        $permissionIds = json_decode((string) ($_POST['permission_ids'] ?? '[]'), true);
+        if ($id <= 0 || !is_array($permissionIds)) {
+            $this->jsonError('Données de délégation invalides.', 422);
+            return;
+        }
+        try {
+            $count = $this->users->saveDelegations($id, $permissionIds, Auth::id() ?? 0);
+            $admin = $this->users->findScoped($id, null);
+            Auth::log('permission_delegation_updated', isset($admin['company_id']) ? (int) $admin['company_id'] : null, Auth::id(), [
+                'target_user_id' => $id, 'permission_ids' => array_map('intval', $permissionIds),
+            ]);
+            $this->json(['success' => true, 'message' => $count . ' permission(s) délégable(s) enregistrée(s).']);
+        } catch (Throwable $exception) {
+            error_log($exception->getMessage());
+            $this->jsonError($exception->getMessage() ?: 'Enregistrement impossible.', 422);
+        }
+    }
+
+    public function savePermissions(): void
+    {
+        if (!$this->validCsrfToken()) {
+            $this->jsonError('Session invalide.', 419);
+            return;
+        }
+        $id = $this->requestId();
+        $effects = json_decode((string) ($_POST['effects'] ?? '{}'), true);
+        if ($id <= 0 || !is_array($effects)) {
+            $this->jsonError('Données de permissions invalides.', 422);
+            return;
+        }
+        try {
+            $scope = (int) ($this->companyScope() ?? 0);
+            $count = $this->users->saveUserPermissions($id, Auth::id() ?? 0, $this->isSuperAdmin(), $scope, $effects);
+            $target = $this->users->findScoped($id, $this->isSuperAdmin() ? null : $scope);
+            Auth::log('user_permissions_updated', isset($target['company_id']) ? (int) $target['company_id'] : null, Auth::id(), [
+                'target_user_id' => $id, 'effects' => $effects,
+            ]);
+            $this->json(['success' => true, 'message' => $count . ' exception(s) de permission enregistrée(s).']);
+        } catch (Throwable $exception) {
+            error_log($exception->getMessage());
+            $this->jsonError($exception->getMessage() ?: 'Enregistrement impossible.', 422);
+        }
     }
 
     private function persist(?int $id = null): void

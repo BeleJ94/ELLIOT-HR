@@ -323,6 +323,170 @@ class User extends Model
         return (int) Database::query($sql, $params)->fetchColumn() > 0;
     }
 
+    public function hasDelegations(int $userId, int $companyId): bool
+    {
+        return (int) Database::query(
+            'SELECT COUNT(*) FROM user_delegations
+             WHERE user_id = :user_id AND company_id = :company_id AND deleted_at IS NULL',
+            ['user_id' => $userId, 'company_id' => $companyId]
+        )->fetchColumn() > 0;
+    }
+
+    public function delegationData(int $adminId): ?array
+    {
+        $admin = Database::query(
+            "SELECT users.id, users.company_id, users.first_name, users.last_name, users.email,
+                    companies.name AS company_name, roles.slug AS role_slug
+             FROM users
+             INNER JOIN roles ON roles.id = users.role_id AND roles.deleted_at IS NULL
+             INNER JOIN companies ON companies.id = users.company_id AND companies.deleted_at IS NULL
+             WHERE users.id = :id AND users.deleted_at IS NULL LIMIT 1",
+            ['id' => $adminId]
+        )->fetch();
+        if (!$admin || ($admin['role_slug'] ?? '') !== 'admin-rh') {
+            return null;
+        }
+
+        $permissions = $this->delegablePermissions();
+        $selected = Database::query(
+            'SELECT permission_id FROM user_delegations WHERE user_id = :user_id AND deleted_at IS NULL',
+            ['user_id' => $adminId]
+        )->fetchAll();
+
+        return [
+            'user' => $admin,
+            'permissions' => $permissions,
+            'selected' => array_map('intval', array_column($selected, 'permission_id')),
+        ];
+    }
+
+    public function saveDelegations(int $adminId, array $permissionIds, int $grantedBy): int
+    {
+        $data = $this->delegationData($adminId);
+        if (!$data) {
+            throw new \InvalidArgumentException('Administrateur RH invalide.');
+        }
+        $allowed = array_map('intval', array_column($data['permissions'], 'id'));
+        $permissionIds = array_values(array_unique(array_intersect(array_map('intval', $permissionIds), $allowed)));
+        $companyId = (int) $data['user']['company_id'];
+
+        Database::beginTransaction();
+        try {
+            Database::query(
+                'UPDATE user_delegations SET deleted_at = NOW(), updated_at = NOW()
+                 WHERE user_id = :user_id AND deleted_at IS NULL',
+                ['user_id' => $adminId]
+            );
+            foreach ($permissionIds as $permissionId) {
+                Database::query(
+                    'INSERT INTO user_delegations (company_id, user_id, permission_id, granted_by, created_at)
+                     VALUES (:company_id, :user_id, :permission_id, :granted_by, NOW())
+                     ON DUPLICATE KEY UPDATE company_id = VALUES(company_id), granted_by = VALUES(granted_by), deleted_at = NULL, updated_at = NOW()',
+                    ['company_id' => $companyId, 'user_id' => $adminId, 'permission_id' => $permissionId, 'granted_by' => $grantedBy]
+                );
+            }
+            Database::commit();
+            return count($permissionIds);
+        } catch (\Throwable $exception) {
+            Database::rollBack();
+            throw $exception;
+        }
+    }
+
+    public function permissionData(int $targetUserId, int $actorId, bool $actorIsSuperAdmin, int $actorCompanyId): ?array
+    {
+        $target = $this->findScoped($targetUserId, $actorIsSuperAdmin ? null : $actorCompanyId);
+        if (!$target || ($target['role_slug'] ?? '') === 'super-admin' || (!$actorIsSuperAdmin && $targetUserId === $actorId)) {
+            return null;
+        }
+        if (!$actorIsSuperAdmin && (int) ($target['company_id'] ?? 0) !== $actorCompanyId) {
+            return null;
+        }
+
+        if ($actorIsSuperAdmin) {
+            $permissions = $this->delegablePermissions();
+        } else {
+            $permissions = Database::query(
+                "SELECT permissions.id, permissions.name, permissions.slug, permissions.module, permissions.description
+                 FROM user_delegations
+                 INNER JOIN permissions ON permissions.id = user_delegations.permission_id AND permissions.deleted_at IS NULL
+                 WHERE user_delegations.user_id = :user_id AND user_delegations.company_id = :company_id
+                 AND user_delegations.deleted_at IS NULL
+                 ORDER BY permissions.module, permissions.name",
+                ['user_id' => $actorId, 'company_id' => $actorCompanyId]
+            )->fetchAll();
+        }
+
+        $roleIds = Database::query(
+            'SELECT permission_id FROM role_permissions WHERE role_id = :role_id AND deleted_at IS NULL',
+            ['role_id' => (int) ($target['role_id'] ?? 0)]
+        )->fetchAll();
+        $roleMap = array_fill_keys(array_map('intval', array_column($roleIds, 'permission_id')), true);
+        $overrides = Database::query(
+            'SELECT permission_id, effect FROM user_permissions WHERE user_id = :user_id AND deleted_at IS NULL',
+            ['user_id' => $targetUserId]
+        )->fetchAll();
+        $overrideMap = [];
+        foreach ($overrides as $override) {
+            $overrideMap[(int) $override['permission_id']] = $override['effect'];
+        }
+        foreach ($permissions as &$permission) {
+            $id = (int) $permission['id'];
+            $permission['role_granted'] = isset($roleMap[$id]);
+            $permission['effect'] = $overrideMap[$id] ?? 'inherit';
+        }
+        unset($permission);
+
+        return ['user' => $target, 'permissions' => $permissions];
+    }
+
+    public function saveUserPermissions(int $targetUserId, int $actorId, bool $actorIsSuperAdmin, int $actorCompanyId, array $effects): int
+    {
+        $data = $this->permissionData($targetUserId, $actorId, $actorIsSuperAdmin, $actorCompanyId);
+        if (!$data) {
+            throw new \InvalidArgumentException('Utilisateur ou périmètre non autorisé.');
+        }
+        $allowed = array_fill_keys(array_map('intval', array_column($data['permissions'], 'id')), true);
+        $companyId = (int) ($data['user']['company_id'] ?? 0);
+        $saved = 0;
+
+        Database::beginTransaction();
+        try {
+            foreach ($allowed as $permissionId => $_) {
+                $effect = (string) ($effects[$permissionId] ?? $effects[(string) $permissionId] ?? 'inherit');
+                if (!in_array($effect, ['allow', 'deny'], true)) {
+                    Database::query(
+                        'UPDATE user_permissions SET deleted_at = NOW(), updated_at = NOW()
+                         WHERE user_id = :user_id AND permission_id = :permission_id AND deleted_at IS NULL',
+                        ['user_id' => $targetUserId, 'permission_id' => $permissionId]
+                    );
+                    continue;
+                }
+                Database::query(
+                    'INSERT INTO user_permissions (company_id, user_id, permission_id, effect, granted_by, created_at)
+                     VALUES (:company_id, :user_id, :permission_id, :effect, :granted_by, NOW())
+                     ON DUPLICATE KEY UPDATE company_id = VALUES(company_id), effect = VALUES(effect), granted_by = VALUES(granted_by), deleted_at = NULL, updated_at = NOW()',
+                    ['company_id' => $companyId, 'user_id' => $targetUserId, 'permission_id' => $permissionId, 'effect' => $effect, 'granted_by' => $actorId]
+                );
+                $saved++;
+            }
+            Database::commit();
+            return $saved;
+        } catch (\Throwable $exception) {
+            Database::rollBack();
+            throw $exception;
+        }
+    }
+
+    private function delegablePermissions(): array
+    {
+        return Database::query(
+            "SELECT id, name, slug, module, description FROM permissions
+             WHERE deleted_at IS NULL AND module NOT IN ('platform', 'companies')
+             ORDER BY module ASC, name ASC"
+        )->fetchAll();
+    }
+
     private function recentActivity(?int $companyId, int $limit = 10): array
     {
         $scope = '';
@@ -340,7 +504,8 @@ class User extends Model
              AND audit_logs.action IN (
                 'login_success', 'login_failed', 'logout',
                 'user_created', 'user_updated', 'user_status_changed',
-                'user_password_reset', 'user_deleted'
+                'user_password_reset', 'user_deleted',
+                'permission_delegation_updated', 'user_permissions_updated'
              )
              {$scope}
              ORDER BY audit_logs.created_at DESC
