@@ -26,9 +26,16 @@ jobs:
           cd /var/www/vhosts/belej-erp.com/elliot-hr.belej-erp.com
           echo "📂 Dossier du projet : $(pwd)"
           
-          # Sauvegarder les fichiers de configuration
+          # .env contient toute la configuration propre au VPS et n'est pas versionne.
+          # On exige sa presence et on le met temporairement hors du dossier Git.
           echo "💾 Sauvegarde des fichiers de configuration..."
-          cp .env /tmp/.env.bak 2>/dev/null || echo "⚠️ Pas de fichier .env trouvé"
+          if [ ! -f .env ]; then
+            echo "❌ Fichier .env introuvable sur le VPS. Déploiement annulé."
+            exit 1
+          fi
+
+          ENV_BACKUP="/tmp/elliot-hr.env.$$"
+          cp .env "$ENV_BACKUP"
           cp .htaccess /tmp/.htaccess.bak 2>/dev/null || echo "⚠️ Pas de fichier .htaccess trouvé"
           
           # Mise à jour
@@ -44,7 +51,8 @@ jobs:
           
           # Restaurer les fichiers de configuration
           echo "♻️ Restauration des fichiers de configuration..."
-          cp /tmp/.env.bak .env 2>/dev/null || echo "⚠️ Pas de .env à restaurer"
+          cp "$ENV_BACKUP" .env
+          rm -f "$ENV_BACKUP"
           cp /tmp/.htaccess.bak .htaccess 2>/dev/null || echo "⚠️ Pas de .htaccess à restaurer"
           
           # Permissions
