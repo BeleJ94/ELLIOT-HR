@@ -97,7 +97,7 @@ $statusMeta = [
 
 <div class="card attendance-matrix-card" data-report-panel="calendar">
     <div class="attendance-matrix-scroll">
-        <table class="table table-vcenter attendance-matrix" id="attendance-calendar-table">
+        <table class="table table-vcenter attendance-matrix" id="attendance-calendar-table" data-no-datatable>
             <thead>
                 <tr>
                     <th class="matrix-sticky matrix-agent-column">Agent</th>
@@ -161,7 +161,7 @@ $statusMeta = [
     </div>
 </div>
 
-<div class="card company-table-card employee-table-card d-none" data-report-panel="summary">
+<div class="card company-table-card employee-table-card d-none" data-report-panel="summary" hidden>
     <div class="table-responsive">
         <table class="table table-vcenter card-table" id="attendance-report-table">
             <thead>

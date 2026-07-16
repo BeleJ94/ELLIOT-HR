@@ -394,8 +394,16 @@
                 button.setAttribute('aria-selected', active ? 'true' : 'false');
             });
             panels.forEach(function (panel) {
-                panel.classList.toggle('d-none', panel.dataset.reportPanel !== view);
+                var active = panel.dataset.reportPanel === view;
+                panel.hidden = !active;
+                panel.classList.toggle('d-none', !active);
             });
+            if (view === 'summary' && window.jQuery && window.jQuery.fn && window.jQuery.fn.DataTable) {
+                var summaryTable = document.getElementById('attendance-report-table');
+                if (summaryTable && window.jQuery.fn.DataTable.isDataTable(summaryTable)) {
+                    window.jQuery(summaryTable).DataTable().columns.adjust().draw(false);
+                }
+            }
             try { window.localStorage.setItem('elliot-attendance-report-view', view); } catch (error) {}
         }
 
@@ -413,7 +421,7 @@
         bindCheckpoint('[data-check-out-url]', 'data-check-out-url', 'out');
         bindCheckpoint('[data-absent-url]', 'data-absent-url', 'absent');
         bindWorkspace();
-        bindReportTable();
         bindReportViews();
+        bindReportTable();
     });
 })();

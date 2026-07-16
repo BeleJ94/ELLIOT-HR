@@ -72,6 +72,10 @@
 
 .attendance-matrix-card { overflow: hidden; }
 
+[data-report-panel][hidden] {
+    display: none !important;
+}
+
 .attendance-matrix-scroll {
     max-height: 68vh;
     overflow: auto;
@@ -108,6 +112,12 @@
     font-size: 10px;
     font-weight: 800;
     letter-spacing: .03em;
+}
+
+/* La matrice n'est volontairement pas une DataTable : ses colonnes sont déjà
+   une chronologie et ne doivent ni être triées ni recalculées par le plugin. */
+.attendance-matrix thead th.matrix-sticky {
+    position: sticky;
 }
 
 .attendance-matrix .matrix-sticky {

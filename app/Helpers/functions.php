@@ -189,7 +189,17 @@ if (!function_exists('url')) {
 if (!function_exists('asset')) {
     function asset(string $path): string
     {
-        return url('public/' . ltrim($path, '/'));
+        $relativePath = ltrim($path, '/');
+        $assetUrl = url('public/' . $relativePath);
+        $localPath = BASE_PATH . '/public/' . $relativePath;
+
+        // Invalide automatiquement le cache navigateur apres chaque deploiement
+        // sans imposer un rechargement force aux utilisateurs.
+        if (is_file($localPath)) {
+            $assetUrl .= (strpos($assetUrl, '?') === false ? '?' : '&') . 'v=' . filemtime($localPath);
+        }
+
+        return $assetUrl;
     }
 }
 
