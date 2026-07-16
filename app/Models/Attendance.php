@@ -312,6 +312,7 @@ class Attendance extends Model
                     employees.first_name,
                     employees.middle_name,
                     employees.last_name,
+                    employees.hire_date,
                     companies.name AS company_name,
                     departments.name AS department_name,
                     positions.title AS position_title,
@@ -399,22 +400,27 @@ class Attendance extends Model
 
         $byEmployee = [];
         foreach ($attendanceRows as $row) {
-            $byEmployee[(int) $row['employee_id']][] = $row;
+            $byEmployee[(int) $row['employee_id']][$row['attendance_date']] = $row;
         }
 
-        $workDays = $this->workDaysInMonth($start, $end);
+        $calendarDays = $this->reportCalendarDays($month);
+        $today = date('Y-m-d');
         $report = [];
 
         foreach ($employees as $employee) {
             $items = $byEmployee[(int) $employee['id']] ?? [];
+            $hireDate = $employee['hire_date'] ?? $start;
             $summary = [
                 'present_days' => 0,
                 'late_days' => 0,
                 'absent_days' => 0,
                 'half_days' => 0,
                 'leave_days' => 0,
+                'holiday_days' => 0,
+                'unrecorded_days' => 0,
                 'worked_minutes' => 0,
                 'overtime_minutes' => 0,
+                'days' => $items,
             ];
 
             foreach ($items as $item) {
@@ -430,21 +436,72 @@ class Attendance extends Model
                     $summary['half_days']++;
                 } elseif ($status === 'leave') {
                     $summary['leave_days']++;
+                } elseif ($status === 'holiday') {
+                    $summary['holiday_days']++;
                 }
 
                 $summary['worked_minutes'] += $this->workedMinutes($item['check_in'] ?? null, $item['check_out'] ?? null);
                 $summary['overtime_minutes'] += $this->overtimeMinutes($item['check_out'] ?? null);
             }
 
-            $recordedDays = $summary['present_days'] + $summary['half_days'] + $summary['leave_days'] + $summary['absent_days'];
-            $summary['absent_days'] += max(0, $workDays - $recordedDays);
-            $summary['work_days'] = $workDays;
-            $summary['presence_rate'] = $workDays > 0 ? round(($summary['present_days'] / $workDays) * 100) : 0;
+            foreach ($calendarDays as $day) {
+                if ($day['is_workday'] && !$day['is_future'] && $day['date'] >= $hireDate && !isset($items[$day['date']])) {
+                    $summary['unrecorded_days']++;
+                }
+            }
+
+            // Une absence doit etre explicitement encodee. Une journee manquante reste
+            // "non encodee" et les dates futures ne degradent jamais le taux mensuel.
+            $employeeWorkDays = count(array_filter($calendarDays, static function (array $day) use ($hireDate): bool {
+                return $day['is_workday'] && !$day['is_future'] && $day['date'] >= $hireDate;
+            }));
+            $weekdayHolidays = count(array_filter($items, static function (array $item) use ($today): bool {
+                $date = (string) ($item['attendance_date'] ?? '');
+                return ($item['status'] ?? '') === 'holiday'
+                    && $date <= $today
+                    && (int) date('N', strtotime($date)) <= 5;
+            }));
+            $effectiveWorkDays = max(0, $employeeWorkDays - $weekdayHolidays);
+            $presenceUnits = $summary['present_days'] + ($summary['half_days'] * 0.5);
+            $summary['work_days'] = $effectiveWorkDays;
+            $summary['presence_rate'] = $effectiveWorkDays > 0
+                ? min(100, (int) round(($presenceUnits / $effectiveWorkDays) * 100))
+                : 0;
 
             $report[] = array_merge($employee, $summary);
         }
 
         return $report;
+    }
+
+    public function reportCalendarDays(string $month): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+
+        $start = $month . '-01';
+        $end = date('Y-m-t', strtotime($start));
+        $today = date('Y-m-d');
+        $labels = [1 => 'Lun', 2 => 'Mar', 3 => 'Mer', 4 => 'Jeu', 5 => 'Ven', 6 => 'Sam', 7 => 'Dim'];
+        $days = [];
+
+        for ($cursor = strtotime($start), $last = strtotime($end); $cursor <= $last; $cursor = strtotime('+1 day', $cursor)) {
+            $date = date('Y-m-d', $cursor);
+            $weekday = (int) date('N', $cursor);
+            $days[] = [
+                'date' => $date,
+                'day' => (int) date('j', $cursor),
+                'weekday' => $weekday,
+                'weekday_label' => $labels[$weekday],
+                'is_workday' => $weekday <= 5,
+                'is_weekend' => $weekday > 5,
+                'is_future' => $date > $today,
+                'is_today' => $date === $today,
+            ];
+        }
+
+        return $days;
     }
 
     public function options(?int $companyId): array

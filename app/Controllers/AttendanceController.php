@@ -50,8 +50,12 @@ class AttendanceController extends Controller
 
     public function report(): void
     {
+        $month = $_GET['month'] ?? date('Y-m');
+        if (!preg_match('/^\d{4}-\d{2}$/', (string) $month)) {
+            $month = date('Y-m');
+        }
         $filters = [
-            'month' => $_GET['month'] ?? date('Y-m'),
+            'month' => $month,
             'employee_id' => $_GET['employee_id'] ?? null,
             'department_id' => $_GET['department_id'] ?? null,
         ];
@@ -60,6 +64,7 @@ class AttendanceController extends Controller
         $this->view('attendance.report', [
             'title' => 'Rapport mensuel de presence',
             'reportRows' => $this->attendance->monthlyReport($this->companyScope(), $filters),
+            'calendarDays' => $this->attendance->reportCalendarDays($month),
             'options' => $this->options(),
             'filters' => $filters,
             'attendance' => $this->attendance,

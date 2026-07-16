@@ -357,8 +357,9 @@
 
     function bindReportTable() {
         var table = document.getElementById('attendance-report-table');
-        if (!table || !window.jQuery || !window.jQuery.fn || !window.jQuery.fn.DataTable) return;
-        var dataTable = window.jQuery(table).DataTable({
+        var dataTable = null;
+        if (table && window.jQuery && window.jQuery.fn && window.jQuery.fn.DataTable) {
+            dataTable = window.jQuery(table).DataTable({
             pageLength: 15,
             order: [[0, 'asc']],
             language: {
@@ -368,9 +369,43 @@
                 paginate: {first: 'Premier', last: 'Dernier', next: 'Suivant', previous: 'Précédent'}
             },
             dom: 'rt<"company-table-footer"ip>'
-        });
+            });
+        }
         var input = document.querySelector('[data-attendance-search]');
-        if (input) input.addEventListener('input', function () { dataTable.search(input.value).draw(); });
+        var calendarRows = Array.prototype.slice.call(document.querySelectorAll('[data-report-calendar-row]'));
+        if (input) input.addEventListener('input', function () {
+            var term = input.value.trim().toLocaleLowerCase();
+            if (dataTable) dataTable.search(input.value).draw();
+            calendarRows.forEach(function (row) {
+                row.hidden = term !== '' && row.textContent.toLocaleLowerCase().indexOf(term) === -1;
+            });
+        });
+    }
+
+    function bindReportViews() {
+        var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-report-view]'));
+        var panels = Array.prototype.slice.call(document.querySelectorAll('[data-report-panel]'));
+        if (!buttons.length || !panels.length) return;
+
+        function activate(view) {
+            buttons.forEach(function (button) {
+                var active = button.dataset.reportView === view;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            panels.forEach(function (panel) {
+                panel.classList.toggle('d-none', panel.dataset.reportPanel !== view);
+            });
+            try { window.localStorage.setItem('elliot-attendance-report-view', view); } catch (error) {}
+        }
+
+        buttons.forEach(function (button) {
+            button.addEventListener('click', function () { activate(button.dataset.reportView); });
+        });
+
+        var saved = 'calendar';
+        try { saved = window.localStorage.getItem('elliot-attendance-report-view') || 'calendar'; } catch (error) {}
+        activate(saved === 'summary' ? 'summary' : 'calendar');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -379,5 +414,6 @@
         bindCheckpoint('[data-absent-url]', 'data-absent-url', 'absent');
         bindWorkspace();
         bindReportTable();
+        bindReportViews();
     });
 })();
