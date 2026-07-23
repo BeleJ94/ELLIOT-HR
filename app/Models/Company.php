@@ -141,11 +141,81 @@ class Company extends Model
         ];
 
         if ($id === null) {
-            return $this->create($payload);
+            Database::beginTransaction();
+
+            try {
+                $companyId = $this->create($payload);
+                $this->provisionDefaultRoles($companyId);
+                Database::commit();
+
+                return $companyId;
+            } catch (\Throwable $exception) {
+                Database::rollBack();
+                throw $exception;
+            }
         }
 
         $this->update($id, $payload);
         return $id;
+    }
+
+    /**
+     * Every tenant owns its operational roles. Without this provisioning, the
+     * user form has no role to display after a new company is selected.
+     */
+    private function provisionDefaultRoles(int $companyId): void
+    {
+        $roles = [
+            'admin-rh' => [
+                'name' => 'Admin RH',
+                'description' => 'Administration RH de l entreprise',
+                'permissions' => [
+                    'employees.manage', 'contracts.manage', 'attendance.manage',
+                    'leaves.manage', 'medical.manage', 'trainings.manage',
+                    'payroll.manage', 'self.view', 'declarations.manage',
+                ],
+            ],
+            'manager' => [
+                'name' => 'Manager',
+                'description' => 'Gestion d equipe et validations',
+                'permissions' => [
+                    'employees.manage', 'attendance.manage', 'leaves.manage',
+                    'medical.manage', 'trainings.manage', 'self.view',
+                ],
+            ],
+            'employe' => [
+                'name' => 'Employe',
+                'description' => 'Acces employe standard',
+                'permissions' => ['medical.manage', 'self.view'],
+            ],
+        ];
+
+        foreach ($roles as $slug => $role) {
+            Database::query(
+                'INSERT INTO roles
+                    (company_id, name, slug, description, is_system, created_at)
+                 VALUES
+                    (:company_id, :name, :slug, :description, 1, NOW())',
+                [
+                    'company_id' => $companyId,
+                    'name' => $role['name'],
+                    'slug' => $slug,
+                    'description' => $role['description'],
+                ]
+            );
+            $roleId = (int) Database::connection()->lastInsertId();
+
+            foreach ($role['permissions'] as $permissionSlug) {
+                Database::query(
+                    'INSERT INTO role_permissions (role_id, permission_id, created_at)
+                     SELECT :role_id, permissions.id, NOW()
+                     FROM permissions
+                     WHERE permissions.slug = :permission_slug
+                     AND permissions.deleted_at IS NULL',
+                    ['role_id' => $roleId, 'permission_slug' => $permissionSlug]
+                );
+            }
+        }
     }
 
     public function updateStatus(int $id, string $status): bool
